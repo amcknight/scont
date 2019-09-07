@@ -499,6 +499,19 @@ contResultType (ApplyToTy  { sc_cont = k }) = contResultType k
 contResultType (ApplyToVal { sc_cont = k }) = contResultType k
 contResultType (TickIt _ k)                 = contResultType k
 
+
+contResultType' :: Scont -> OutType
+contResultType' s =
+  runScont s
+    (oneShot $ \t _         -> t)   -- Stop
+    (oneShot $ \_ k         -> k)  -- CastIt
+    (oneShot $ \_ _ _ k     -> k)  -- ApplyToVal
+    (oneShot $ \_ _ k       -> k)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ k   -> k)  -- Select
+    (oneShot $ \_ _ _ _ _ k -> k)  -- StrictBind
+    (oneShot $ \_ _ _ k     -> k)  -- StrictArg
+    (oneShot $ \_ k         -> k)  -- TickIt
+
 contHoleType :: SimplCont -> OutType
 contHoleType (Stop ty _)                      = ty
 contHoleType (TickIt _ k)                     = contHoleType k

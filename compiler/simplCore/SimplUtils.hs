@@ -455,6 +455,19 @@ contIsDupable (StrictArg { sc_dup = OkToDup })  = True -- ...ditto...
 contIsDupable (CastIt _ k)                      = contIsDupable k
 contIsDupable _                                 = False
 
+
+contIsDupable' :: Scont -> Bool
+contIsDupable' s =
+  runScont s
+    (oneShot $ \_ _         -> True)   -- Stop
+    (oneShot $ \_ k         -> k)      -- CastIt
+    (oneShot $ \a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- ApplyToVal -- See Note [DupFlag invariants]
+    (oneShot $ \_ _ k       -> k)      -- ApplyToTy
+    (oneShot $ \a _ _ _ _   -> case a of {OkToDup -> True; _ -> False})  -- Select -- See Note [DupFlag invariants]
+    (oneShot $ \_ _ _ _ _ _ -> False)  -- StrictBind
+    (oneShot $ \a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- StrictArg -- See Note [DupFlag invariants]
+    (oneShot $ \_ _         -> False)  -- TickIt
+
 -------------------
 contIsTrivial :: SimplCont -> Bool
 contIsTrivial (Stop {})                                         = True

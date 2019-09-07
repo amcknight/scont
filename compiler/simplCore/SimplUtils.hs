@@ -583,6 +583,46 @@ contArgs cont
                    -- because we want to get as much IdInfo as possible
 
 
+-- TODO(sandy): get rid of the toSconts
+contArgs' :: Scont -> (Bool, [ArgSummary], Scont)
+-- Summarises value args, discards type args and coercions
+-- The returned continuation of the call is only used to
+-- answer questions like "are you interesting?"
+contArgs' cont
+  | lone cont = (True, [], cont)
+  | otherwise =
+      let (a, b, c) = go [] cont
+       in (a, reverse b, c)
+  where
+    lone s =
+      runScont s
+        (oneShot $ \_ _         -> True)   -- Stop
+        (oneShot $ \_ _         -> False)  -- CastIt
+        (oneShot $ \_ _ _ _     -> False)  -- ApplyToVal
+        (oneShot $ \_ _ _       -> False)  -- ApplyToTy  -- See Note [Lone variables] in CoreUnfold
+        (oneShot $ \_ _ _ _ _   -> True)   -- Select
+        (oneShot $ \_ _ _ _ _ _ -> True)   -- StrictBind
+        (oneShot $ \_ _ _ _     -> True)   -- StrictArg
+        (oneShot $ \_ _         -> True)   -- TickIt
+
+    go args s =
+      runScont s
+        (oneShot $ \a b         -> (False, args, toScont $ Stop a b))  -- Stop
+        (oneShot $ \a b         -> b)  -- CastIt
+        (oneShot $ \a arg se k  -> (False, is_interesting arg se : args, toScont $ ApplyToVal a arg se $ thd k))  -- ApplyToVal
+        (oneShot $ \a b c       -> c)  -- ApplyToTy
+        (oneShot $ \a b c d e   -> (False, args, toScont $ Select a b c d $ thd e))  -- Select
+        (oneShot $ \a b c d e f -> (False, args, toScont $ StrictBind a b c d e $ thd f))  -- StrictBind
+        (oneShot $ \a b c d     -> (False, args, toScont $ StrictArg a b c $ thd d))  -- StrictArg
+        (oneShot $ \a b         -> (False, args, toScont $ TickIt a $ thd b))  -- TickIt
+
+    thd (a, b, c) = fromScont c
+
+    is_interesting arg se = interestingArg se arg
+                   -- Do *not* use short-cutting substitution here
+                   -- because we want to get as much IdInfo as possible
+
+
 -------------------
 mkArgInfo :: SimplEnv
           -> Id

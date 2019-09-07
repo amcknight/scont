@@ -339,14 +339,14 @@ argInfoAppArgs (CastBy {}                : _)  = []  -- Stop at a cast
 argInfoAppArgs (ValArg e                 : as) = e       : argInfoAppArgs as
 argInfoAppArgs (TyArg { as_arg_ty = ty } : as) = Type ty : argInfoAppArgs as
 
-pushSimplifiedArgs :: SimplEnv -> [ArgSpec] -> SimplCont -> SimplCont
+pushSimplifiedArgs :: SimplEnv -> [ArgSpec] -> Scont -> Scont
 pushSimplifiedArgs _env []           k = k
 pushSimplifiedArgs env  (arg : args) k
   = case arg of
       TyArg { as_arg_ty = arg_ty, as_hole_ty = hole_ty }
-               -> ApplyToTy  { sc_arg_ty = arg_ty, sc_hole_ty = hole_ty, sc_cont = rest }
-      ValArg e -> ApplyToVal { sc_arg = e, sc_env = env, sc_dup = Simplified, sc_cont = rest }
-      CastBy c -> CastIt c rest
+               -> toScont $ ApplyToTy  { sc_arg_ty = arg_ty, sc_hole_ty = hole_ty, sc_cont = fromScont rest }
+      ValArg e -> toScont $ ApplyToVal { sc_arg = e, sc_env = env, sc_dup = Simplified, sc_cont = fromScont rest }
+      CastBy c -> toScont $ CastIt c $ fromScont rest
   where
     rest = pushSimplifiedArgs env args k
            -- The env has an empty SubstEnv

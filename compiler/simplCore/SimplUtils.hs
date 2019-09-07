@@ -508,6 +508,19 @@ countArgs (ApplyToTy  { sc_cont = cont }) = 1 + countArgs cont
 countArgs (ApplyToVal { sc_cont = cont }) = 1 + countArgs cont
 countArgs _                               = 0
 
+countArgs' :: Scont -> Int
+-- Count all arguments, including types, coercions, and other values
+countArgs' s =
+  runScont s
+    (oneShot $ \_ _         -> 0)  -- Stop
+    (oneShot $ \_ _         -> 0)  -- CastIt
+    (oneShot $ \_ _ _ args  -> 1 + args)  -- ApplyToVal
+    (oneShot $ \_ _ args    -> 1 + args)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _   -> 0)  -- Select
+    (oneShot $ \_ _ _ _ _ _ -> 0)  -- StrictBind
+    (oneShot $ \_ _ _ _     -> 0)  -- StrictArg
+    (oneShot $ \_ _         -> 0)  -- TickIt
+
 contArgs :: SimplCont -> (Bool, [ArgSummary], SimplCont)
 -- Summarises value args, discards type args and coercions
 -- The returned continuation of the call is only used to

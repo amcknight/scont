@@ -116,13 +116,13 @@ fromScont s =
 
 toScont :: SimplCont -> Scont
 toScont (Stop m n)                   = Scont $ oneShot $ \f _ _ _ _ _ _ _ -> f m n
-toScont (CastIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> b m $ runScont (toScont scont) a b c d e f g h
-toScont (ApplyToVal m n o scont)     = Scont $ oneShot $ \a b c d e f g h -> c m n o $ runScont (toScont scont) a b c d e f g h
-toScont (ApplyToTy m n scont)        = Scont $ oneShot $ \a b c d e f g h -> d m n $ runScont (toScont scont) a b c d e f g h
-toScont (Select m n o p scont)       = Scont $ oneShot $ \a b c d e f g h -> e m n o p $ runScont (toScont scont) a b c d e f g h
+toScont (CastIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> b m         $ runScont (toScont scont) a b c d e f g h
+toScont (ApplyToVal m n o scont)     = Scont $ oneShot $ \a b c d e f g h -> c m n o     $ runScont (toScont scont) a b c d e f g h
+toScont (ApplyToTy m n scont)        = Scont $ oneShot $ \a b c d e f g h -> d m n       $ runScont (toScont scont) a b c d e f g h
+toScont (Select m n o p scont)       = Scont $ oneShot $ \a b c d e f g h -> e m n o p   $ runScont (toScont scont) a b c d e f g h
 toScont (StrictBind m n o p q scont) = Scont $ oneShot $ \a b c d e f g h -> f m n o p q $ runScont (toScont scont) a b c d e f g h
-toScont (StrictArg m n o scont)      = Scont $ oneShot $ \a b c d e f g h -> g m n o $ runScont (toScont scont) a b c d e f g h
-toScont (TickIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> h m $ runScont (toScont scont) a b c d e f g h
+toScont (StrictArg m n o scont)      = Scont $ oneShot $ \a b c d e f g h -> g m n o     $ runScont (toScont scont) a b c d e f g h
+toScont (TickIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> h m         $ runScont (toScont scont) a b c d e f g h
 
 
 newtype Scont = Scont {runScont :: forall r.(OutType -> CallCtxt -> r) -- Stop
@@ -405,10 +405,34 @@ contIsRhs :: SimplCont -> Bool
 contIsRhs (Stop _ RhsCtxt) = True
 contIsRhs _                = False
 
+contIsRhs' :: Scont -> Bool
+contIsRhs' s =
+  runScont s
+    (oneShot $ \_ a         -> case a of {RhsCtxt -> True; _ -> False})
+    (oneShot $ \_ _         -> False)
+    (oneShot $ \_ _ _ _     -> False)
+    (oneShot $ \_ _ _       -> False)
+    (oneShot $ \_ _ _ _ _   -> False)
+    (oneShot $ \_ _ _ _ _ _ -> False)
+    (oneShot $ \_ _ _ _     -> False)
+    (oneShot $ \_ _         -> False)
+
 -------------------
 contIsStop :: SimplCont -> Bool
 contIsStop (Stop {}) = True
 contIsStop _         = False
+
+contIsStop' :: Scont -> Bool
+contIsStop' s =
+  runScont s
+    (oneShot $ \_ _         -> True)
+    (oneShot $ \_ _         -> False)
+    (oneShot $ \_ _ _ _     -> False)
+    (oneShot $ \_ _ _       -> False)
+    (oneShot $ \_ _ _ _ _   -> False)
+    (oneShot $ \_ _ _ _ _ _ -> False)
+    (oneShot $ \_ _ _ _     -> False)
+    (oneShot $ \_ _         -> False)
 
 contIsDupable :: SimplCont -> Bool
 contIsDupable (Stop {})                         = True

@@ -537,7 +537,7 @@ mkArgInfo :: SimplEnv
           -> Id
           -> [CoreRule] -- Rules for function
           -> Int        -- Number of value args
-          -> SimplCont  -- Context of the call
+          -> Scont  -- Context of the call
           -> ArgInfo
 
 mkArgInfo env fun rules n_val_args call_cont
@@ -550,7 +550,7 @@ mkArgInfo env fun rules n_val_args call_cont
   | otherwise
   = ArgInfo { ai_fun = fun, ai_args = [], ai_type = fun_ty
             , ai_rules = fun_rules
-            , ai_encl  = interestingArgContext rules call_cont
+            , ai_encl  = interestingArgContext' rules call_cont
             , ai_strs  = arg_stricts
             , ai_discs = arg_discounts }
   where

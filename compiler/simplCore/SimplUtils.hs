@@ -726,6 +726,40 @@ interestingCallContext env cont
         -- a build it's *great* to inline it here.  So we must ensure that
         -- the context for (f x) is not totally uninteresting.
 
+interestingCallContext' :: SimplEnv -> Scont -> CallCtxt
+-- See Note [Interesting call context]
+interestingCallContext' env cont
+  = interesting cont
+  where
+    interesting s = runScont s
+      (oneShot $ \_ cci         -> cci)   -- Stop
+      (oneShot $ \_ k         -> k)  -- CastIt
+        -- If this call is the arg of a strict function, the context
+        -- is a bit interesting.  If we inline here, we may get useful
+        -- evaluation information to avoid repeated evals: e.g.
+        --      x + (y * z)
+        -- Here the contIsInteresting makes the '*' keener to inline,
+        -- which in turn exposes a constructor which makes the '+' inline.
+        -- Assuming that +,* aren't small enough to inline regardless.
+        --
+        -- It's also very important to inline in a strict context for things
+        -- like
+        --              foldr k z (f x)
+        -- Here, the context of (f x) is strict, and if f's unfolding is
+        -- a build it's *great* to inline it here.  So we must ensure that
+        -- the context for (f x) is not totally uninteresting.
+      (oneShot $ \_ _ _ _     -> ValAppCtxt)  -- ApplyToVal
+        -- Can happen if we have (f Int |> co) y
+        -- If f has an INLINE prag we need to give it some
+        -- motivation to inline. See Note [Cast then apply]
+        -- in CoreUnfold
+      (oneShot $ \_ _ k       -> k)  -- ApplyToTy
+      (oneShot $ \_ _ _ _ _   -> if sm_case_case (getMode env) then CaseCtxt else BoringCtxt)  -- Select
+       -- See Note [No case of case is boring]
+      (oneShot $ \_ _ _ _ _ _ -> BoringCtxt)  -- StrictBind
+      (oneShot $ \_ _ cci _   -> cci)  -- StrictArg
+      (oneShot $ \_ k         -> k)  -- TickIt
+
 interestingArgContext :: [CoreRule] -> SimplCont -> Bool
 -- If the argument has form (f x y), where x,y are boring,
 -- and f is marked INLINE, then we don't want to inline f.

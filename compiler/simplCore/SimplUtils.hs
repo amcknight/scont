@@ -476,6 +476,18 @@ contIsTrivial (ApplyToVal { sc_arg = Coercion _, sc_cont = k }) = contIsTrivial 
 contIsTrivial (CastIt _ k)                                      = contIsTrivial k
 contIsTrivial _                                                 = False
 
+contIsTrivial' :: Scont -> Bool
+contIsTrivial' s =
+  runScont s
+    (oneShot $ \_ _         -> True)   -- Stop
+    (oneShot $ \_ k         -> k)  -- CastIt
+    (oneShot $ \_ a _ k     -> case (a, k) of {(Coercion _, k) -> k; _ -> False})  -- ApplyToVal
+    (oneShot $ \_ _ k       -> k)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _   -> False)  -- Select
+    (oneShot $ \_ _ _ _ _ _ -> False)  -- StrictBind
+    (oneShot $ \_ _ _ _     -> False)  -- StrictArg
+    (oneShot $ \_ _         -> False)  -- TickIt
+
 -------------------
 contResultType :: SimplCont -> OutType
 contResultType (Stop ty _)                  = ty

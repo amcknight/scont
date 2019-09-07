@@ -5,6 +5,7 @@
 -}
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
 
 module SimplUtils (
         -- Rebuilding
@@ -71,6 +72,7 @@ import FastString       ( fsLit )
 
 import Control.Monad    ( when )
 import Data.List        ( sortBy )
+import GHC.Magic        ( oneShot )
 
 {-
 ************************************************************************
@@ -99,6 +101,39 @@ Key points:
   * A SimplCont describes a context that *does not* bind
     any variables.  E.g. \x. [] is not a SimplCont
 -}
+
+fromScont :: Scont -> SimplCont
+fromScont s =
+  runScont s
+    Stop
+    CastIt
+    ApplyToVal
+    ApplyToTy
+    Select
+    StrictBind
+    StrictArg
+    TickIt
+
+toScont :: SimplCont -> Scont
+toScont (Stop m n)                   = Scont $ oneShot $ \f _ _ _ _ _ _ _ -> f m n
+toScont (CastIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> b m $ runScont (toScont scont) a b c d e f g h
+toScont (ApplyToVal m n o scont)     = Scont $ oneShot $ \a b c d e f g h -> c m n o $ runScont (toScont scont) a b c d e f g h
+toScont (ApplyToTy m n scont)        = Scont $ oneShot $ \a b c d e f g h -> d m n $ runScont (toScont scont) a b c d e f g h
+toScont (Select m n o p scont)       = Scont $ oneShot $ \a b c d e f g h -> e m n o p $ runScont (toScont scont) a b c d e f g h
+toScont (StrictBind m n o p q scont) = Scont $ oneShot $ \a b c d e f g h -> f m n o p q $ runScont (toScont scont) a b c d e f g h
+toScont (StrictArg m n o scont)      = Scont $ oneShot $ \a b c d e f g h -> g m n o $ runScont (toScont scont) a b c d e f g h
+toScont (TickIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> h m $ runScont (toScont scont) a b c d e f g h
+
+
+newtype Scont = Scont {runScont :: forall r.(OutType -> CallCtxt -> r) -- Stop
+              -> (OutCoercion -> r -> r) -- CastIt
+              -> (DupFlag -> InExpr -> StaticEnv -> r -> r) -- ApplyToVal
+              -> (OutType -> OutType -> r -> r) -- ApplyToTy
+              -> (DupFlag -> InId -> [InAlt] -> StaticEnv -> r -> r) -- Select
+              -> (DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> r -> r) -- StrictBind
+              -> (DupFlag -> ArgInfo -> CallCtxt -> r -> r) -- StrictArg
+              -> (Tickish Id -> r -> r) -- TickIt
+              -> r}
 
 data SimplCont
   = Stop                -- Stop[e] = e

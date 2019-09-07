@@ -401,6 +401,18 @@ contIsRhsOrArg (StrictBind {}) = True
 contIsRhsOrArg (StrictArg {})  = True
 contIsRhsOrArg _               = False
 
+contIsRhsOrArg' :: Scont -> Bool
+contIsRhsOrArg' s =
+  runScont s
+    (oneShot $ \_ _         -> True)
+    (oneShot $ \_ _         -> False)
+    (oneShot $ \_ _ _ _     -> False)
+    (oneShot $ \_ _ _       -> False)
+    (oneShot $ \_ _ _ _ _   -> False)
+    (oneShot $ \_ _ _ _ _ _ -> True)
+    (oneShot $ \_ _ _ _     -> True)
+    (oneShot $ \_ _         -> False)
+
 contIsRhs :: SimplCont -> Bool
 contIsRhs (Stop _ RhsCtxt) = True
 contIsRhs _                = False

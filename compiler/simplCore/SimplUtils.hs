@@ -520,6 +520,19 @@ countArgs (ApplyToTy  { sc_cont = cont }) = 1 + countArgs cont
 countArgs (ApplyToVal { sc_cont = cont }) = 1 + countArgs cont
 countArgs _                               = 0
 
+countArgs' :: Scont -> Int
+-- Count all arguments, including types, coercions, and other values
+countArgs' s =
+  runScont s
+    (oneShot $ \_ _         -> 0)  -- Stop
+    (oneShot $ \_ _         -> 0)  -- CastIt
+    (oneShot $ \_ _ _ args  -> 1 + args)  -- ApplyToVal
+    (oneShot $ \_ _ args    -> 1 + args)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _   -> 0)  -- Select
+    (oneShot $ \_ _ _ _ _ _ -> 0)  -- StrictBind
+    (oneShot $ \_ _ _ _     -> 0)  -- StrictArg
+    (oneShot $ \_ _         -> 0)  -- TickIt
+
 contArgs :: SimplCont -> (Bool, [ArgSummary], SimplCont)
 -- Summarises value args, discards type args and coercions
 -- The returned continuation of the call is only used to
@@ -549,7 +562,7 @@ mkArgInfo :: SimplEnv
           -> Id
           -> [CoreRule] -- Rules for function
           -> Int        -- Number of value args
-          -> SimplCont  -- Context of the call
+          -> Scont  -- Context of the call
           -> ArgInfo
 
 mkArgInfo env fun rules n_val_args call_cont
@@ -562,7 +575,7 @@ mkArgInfo env fun rules n_val_args call_cont
   | otherwise
   = ArgInfo { ai_fun = fun, ai_args = [], ai_type = fun_ty
             , ai_rules = fun_rules
-            , ai_encl  = interestingArgContext rules call_cont
+            , ai_encl  = interestingArgContext' rules call_cont
             , ai_strs  = arg_stricts
             , ai_discs = arg_discounts }
   where
@@ -1563,7 +1576,7 @@ won't inline because 'e' is too big.
 ************************************************************************
 -}
 
-mkLam :: SimplEnv -> [OutBndr] -> OutExpr -> SimplCont -> SimplM OutExpr
+mkLam :: SimplEnv -> [OutBndr] -> OutExpr -> Scont -> SimplM OutExpr
 -- mkLam tries three things
 --      a) eta reduction, if that gives a trivial expression
 --      b) eta expansion [only if there are some value lambdas]
@@ -1599,7 +1612,7 @@ mkLam env bndrs body cont
       = do { tick (EtaReduction (head bndrs))
            ; return etad_lam }
 
-      | not (contIsRhs cont)   -- See Note [Eta-expanding lambdas]
+      | not (contIsRhs' cont)   -- See Note [Eta-expanding lambdas]
       , sm_eta_expand (getMode env)
       , any isRuntimeVar bndrs
       , let body_arity = exprEtaExpandArity dflags body

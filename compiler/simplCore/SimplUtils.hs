@@ -503,7 +503,7 @@ contResultType (TickIt _ k)                 = contResultType k
 contResultType' :: Scont -> OutType
 contResultType' s =
   runScont s
-    (oneShot $ \t _         -> t)   -- Stop
+    (oneShot $ \t _         -> t)  -- Stop
     (oneShot $ \_ k         -> k)  -- CastIt
     (oneShot $ \_ _ _ k     -> k)  -- ApplyToVal
     (oneShot $ \_ _ k       -> k)  -- ApplyToTy
@@ -525,6 +525,19 @@ contHoleType (ApplyToVal { sc_arg = e, sc_env = se, sc_dup = dup, sc_cont = k })
                (contHoleType k)
 contHoleType (Select { sc_dup = d, sc_bndr =  b, sc_env = se })
   = perhapsSubstTy d se (idType b)
+
+contHoleType' :: Scont -> OutType
+contHoleType' s =
+  runScont s
+    (oneShot $ \t _         -> t)   -- Stop
+    (oneShot $ \c _         -> pFst (coercionKind c))  -- CastIt
+    (oneShot $ \d a e k     -> mkVisFunTy (perhapsSubstTy d e (exprType a)) k)  -- ApplyToVal
+    (oneShot $ \_ t _       -> t)  -- ApplyToTy   -- See Note [The hole type in ApplyToTy]
+    (oneShot $ \d b _ e _   -> perhapsSubstTy d e (idType b))  -- Select
+    (oneShot $ \d b _ _ e _ -> perhapsSubstTy d e (idType b))  -- StrictBind
+    (oneShot $ \_ a _ _     -> funArgTy (ai_type a))  -- StrictArg
+    (oneShot $ \_ k         -> k)  -- TickIt
+
 
 -------------------
 countArgs :: SimplCont -> Int

@@ -1551,7 +1551,7 @@ won't inline because 'e' is too big.
 ************************************************************************
 -}
 
-mkLam :: SimplEnv -> [OutBndr] -> OutExpr -> SimplCont -> SimplM OutExpr
+mkLam :: SimplEnv -> [OutBndr] -> OutExpr -> Scont -> SimplM OutExpr
 -- mkLam tries three things
 --      a) eta reduction, if that gives a trivial expression
 --      b) eta expansion [only if there are some value lambdas]
@@ -1587,7 +1587,7 @@ mkLam env bndrs body cont
       = do { tick (EtaReduction (head bndrs))
            ; return etad_lam }
 
-      | not (contIsRhs cont)   -- See Note [Eta-expanding lambdas]
+      | not (contIsRhs' cont)   -- See Note [Eta-expanding lambdas]
       , sm_eta_expand (getMode env)
       , any isRuntimeVar bndrs
       , let body_arity = exprEtaExpandArity dflags body

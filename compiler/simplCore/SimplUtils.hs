@@ -425,14 +425,14 @@ contIsStop _         = False
 contIsStop' :: Scont -> Bool
 contIsStop' s =
   runScont s
-    (oneShot $ \_ _         -> True)
-    (oneShot $ \_ _         -> False)
-    (oneShot $ \_ _ _ _     -> False)
-    (oneShot $ \_ _ _       -> False)
-    (oneShot $ \_ _ _ _ _   -> False)
-    (oneShot $ \_ _ _ _ _ _ -> False)
-    (oneShot $ \_ _ _ _     -> False)
-    (oneShot $ \_ _         -> False)
+    (oneShot $ \_ _         -> True)   -- Stop
+    (oneShot $ \_ _         -> False)  -- CastIt
+    (oneShot $ \_ _ _ _     -> False)  -- ApplyToVal
+    (oneShot $ \_ _ _       -> False)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _   -> False)  -- Select
+    (oneShot $ \_ _ _ _ _ _ -> False)  -- StrictBind
+    (oneShot $ \_ _ _ _     -> False)  -- StrictArg
+    (oneShot $ \_ _         -> False)  -- TickIt
 
 contIsDupable :: SimplCont -> Bool
 contIsDupable (Stop {})                         = True
@@ -748,6 +748,46 @@ interestingArgContext rules call_cont
     go (CastIt _ c)                 = go c
     go (Stop _ cci)                 = interesting cci
     go (TickIt _ c)                 = go c
+
+    interesting RuleArgCtxt = True
+    interesting _           = False
+
+interestingArgContext' :: [CoreRule] -> Scont -> Bool
+-- If the argument has form (f x y), where x,y are boring,
+-- and f is marked INLINE, then we don't want to inline f.
+-- But if the context of the argument is
+--      g (f x y)
+-- where g has rules, then we *do* want to inline f, in case it
+-- exposes a rule that might fire.  Similarly, if the context is
+--      h (g (f x x))
+-- where h has rules, then we do want to inline f; hence the
+-- call_cont argument to interestingArgContext
+--
+-- The ai-rules flag makes this happen; if it's
+-- set, the inliner gets just enough keener to inline f
+-- regardless of how boring f's arguments are, if it's marked INLINE
+--
+-- The alternative would be to *always* inline an INLINE function,
+-- regardless of how boring its context is; but that seems overkill
+-- For example, it'd mean that wrapper functions were always inlined
+--
+-- The call_cont passed to interestingArgContext is the context of
+-- the call itself, e.g. g <hole> in the example above
+interestingArgContext' rules call_cont
+  = notNull rules || enclosing_fn_has_rules
+  where
+    enclosing_fn_has_rules = go call_cont
+
+    go s =
+      runScont s
+        (oneShot $ \_ cci       -> interesting cci)  -- Stop
+        (oneShot $ \_ c         -> c)                -- CastIt
+        (oneShot $ \_ _ _ _     -> False)            -- ApplyToVal  -- Shouldn't really happen
+        (oneShot $ \_ _ _       -> False)            -- ApplyToTy   -- Ditto
+        (oneShot $ \_ _ _ _ _   -> False)            -- Select
+        (oneShot $ \_ _ _ _ _ _ -> False)            -- StrictBind  -- ?
+        (oneShot $ \_ _ cci _   -> interesting cci)  -- StrictArg
+        (oneShot $ \_ c         -> c)                -- TickIt
 
     interesting RuleArgCtxt = True
     interesting _           = False

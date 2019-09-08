@@ -271,6 +271,9 @@ instance Outputable DupFlag where
   ppr NoDup      = text "nodup"
   ppr Simplified = text "simpl"
 
+instance Outputable Scont where
+  ppr (Scont{}) = text "scont"
+
 instance Outputable SimplCont where
   ppr (Stop ty interesting) = text "Stop" <> brackets (ppr interesting) <+> ppr ty
   ppr (CastIt co cont  )    = (text "CastIt" <+> pprOptCo co) $$ ppr cont
@@ -736,46 +739,9 @@ This made a small compile-time perf improvement in perf/compiler/T6048,
 and it looks plausible to me.
 -}
 
-interestingCallContext :: SimplEnv -> SimplCont -> CallCtxt
+interestingCallContext :: SimplEnv -> Scont -> CallCtxt
 -- See Note [Interesting call context]
 interestingCallContext env cont
-  = interesting cont
-  where
-    interesting (Select {})
-       | sm_case_case (getMode env) = CaseCtxt
-       | otherwise                  = BoringCtxt
-       -- See Note [No case of case is boring]
-
-    interesting (ApplyToVal {}) = ValAppCtxt
-        -- Can happen if we have (f Int |> co) y
-        -- If f has an INLINE prag we need to give it some
-        -- motivation to inline. See Note [Cast then apply]
-        -- in CoreUnfold
-
-    interesting (StrictArg { sc_cci = cci }) = cci
-    interesting (StrictBind {})              = BoringCtxt
-    interesting (Stop _ cci)                 = cci
-    interesting (TickIt _ k)                 = interesting k
-    interesting (ApplyToTy { sc_cont = k })  = interesting k
-    interesting (CastIt _ k)                 = interesting k
-        -- If this call is the arg of a strict function, the context
-        -- is a bit interesting.  If we inline here, we may get useful
-        -- evaluation information to avoid repeated evals: e.g.
-        --      x + (y * z)
-        -- Here the contIsInteresting makes the '*' keener to inline,
-        -- which in turn exposes a constructor which makes the '+' inline.
-        -- Assuming that +,* aren't small enough to inline regardless.
-        --
-        -- It's also very important to inline in a strict context for things
-        -- like
-        --              foldr k z (f x)
-        -- Here, the context of (f x) is strict, and if f's unfolding is
-        -- a build it's *great* to inline it here.  So we must ensure that
-        -- the context for (f x) is not totally uninteresting.
-
-interestingCallContext' :: SimplEnv -> Scont -> CallCtxt
--- See Note [Interesting call context]
-interestingCallContext' env cont
   = interesting cont
   where
     interesting s = runScont s

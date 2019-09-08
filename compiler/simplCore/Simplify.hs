@@ -5,6 +5,7 @@
 -}
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE ViewPatterns #-}
 
 module Simplify ( simplTopBinds, simplExpr, simplRules ) where
 
@@ -1093,7 +1094,7 @@ simplTick env tickish expr cont
 
   -- Push tick inside if the context looks like this will allow us to
   -- do a case-of-case - see Note [case-of-scc-of-case]
-  | Select {} <- cont, Just expr' <- push_tick_inside
+  | Select {} <- fromScont cont, Just expr' <- push_tick_inside
   = simplExprF env expr' cont
 
   -- We don't want to move the tick, but we might still want to allow
@@ -1159,10 +1160,10 @@ simplTick env tickish expr cont
 
   -- Push type application and coercion inside a tick
   splitCont :: Scont -> (Scont, Scont)
-  splitCont cont@(ApplyToTy { sc_cont = tail }) = (cont { sc_cont = inc }, outc)
-    where (inc,outc) = splitCont tail
-  splitCont (CastIt co c) = (CastIt co inc, outc)
-    where (inc,outc) = splitCont c
+  splitCont cont@(fromScont -> ApplyToTy { sc_cont = tail }) = (toScont $ (fromScont cont) { sc_cont = fromScont inc }, outc)
+    where (inc,outc) = splitCont $ toScont tail
+  splitCont (fromScont -> CastIt co c) = (mkCastIt co inc, outc)
+    where (inc,outc) = splitCont $ toScont c
   splitCont other = (mkBoringStop (contHoleType other), other)
 
   getDoneId (DoneId id)  = id
@@ -1213,32 +1214,32 @@ rebuild :: SimplEnv -> OutExpr -> Scont -> SimplM (SimplFloats, OutExpr)
 -- At this point the substitution in the SimplEnv should be irrelevant;
 -- only the in-scope set matters
 rebuild env expr cont
-  = case cont of
+  = case fromScont cont of
       Stop {}          -> return (emptyFloats env, expr)
-      TickIt t cont    -> rebuild env (mkTick t expr) cont
-      CastIt co cont   -> rebuild env (mkCast expr co) cont
+      TickIt t cont    -> rebuild env (mkTick t expr) $ toScont cont
+      CastIt co cont   -> rebuild env (mkCast expr co) $ toScont cont
                        -- NB: mkCast implements the (Coercion co |> g) optimisation
 
       Select { sc_bndr = bndr, sc_alts = alts, sc_env = se, sc_cont = cont }
-        -> rebuildCase (se `setInScopeFromE` env) expr bndr alts cont
+        -> rebuildCase (se `setInScopeFromE` env) expr bndr alts $ toScont cont
 
       StrictArg { sc_fun = fun, sc_cont = cont }
-        -> rebuildCall env (fun `addValArgTo` expr) cont
+        -> rebuildCall env (fun `addValArgTo` expr) $ toScont cont
       StrictBind { sc_bndr = b, sc_bndrs = bs, sc_body = body
                  , sc_env = se, sc_cont = cont }
         -> do { (floats1, env') <- simplNonRecX (se `setInScopeFromE` env) b expr
                                   -- expr satisfies let/app since it started life
                                   -- in a call to simplNonRecE
-              ; (floats2, expr') <- simplLam env' bs body cont
+              ; (floats2, expr') <- simplLam env' bs body $ toScont cont
               ; return (floats1 `addFloats` floats2, expr') }
 
       ApplyToTy  { sc_arg_ty = ty, sc_cont = cont}
-        -> rebuild env (App expr (Type ty)) cont
+        -> rebuild env (App expr (Type ty)) $ toScont cont
 
       ApplyToVal { sc_arg = arg, sc_env = se, sc_dup = dup_flag, sc_cont = cont}
         -- See Note [Avoid redundant simplification]
         -> do { (_, _, arg') <- simplArg env dup_flag se arg
-              ; rebuild env (App expr arg') cont }
+              ; rebuild env (App expr arg') $ toScont cont }
 
 {-
 ************************************************************************
@@ -1294,19 +1295,19 @@ simplCast env body co0 cont0
         addCoerceM (MCo co) cont = addCoerce co cont
 
         addCoerce :: OutCoercion -> Scont -> SimplM Scont
-        addCoerce co1 (CastIt co2 cont)  -- See Note [Optimising reflexivity]
-          | isReflexiveCo co' = return cont
-          | otherwise         = addCoerce co' cont
+        addCoerce co1 (fromScont -> CastIt co2 cont)  -- See Note [Optimising reflexivity]
+          | isReflexiveCo co' = return $ toScont cont
+          | otherwise         = addCoerce co' $ toScont cont
           where
             co' = mkTransCo co1 co2
 
-        addCoerce co cont@(ApplyToTy { sc_arg_ty = arg_ty, sc_cont = tail })
+        addCoerce co cont@(fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = tail })
           | Just (arg_ty', m_co') <- pushCoTyArg co arg_ty
           = {-#SCC "addCoerce-pushCoTyArg" #-}
-            do { tail' <- addCoerceM m_co' tail
-               ; return (cont { sc_arg_ty = arg_ty', sc_cont = tail' }) }
+            do { tail' <- addCoerceM m_co' $ toScont tail
+               ; return (toScont $ (fromScont cont) { sc_arg_ty = arg_ty', sc_cont = fromScont $ tail' }) }
 
-        addCoerce co cont@(ApplyToVal { sc_arg = arg, sc_env = arg_se
+        addCoerce co cont@(fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
                                       , sc_dup = dup, sc_cont = tail })
           | Just (co1, m_co2) <- pushCoValArg co
           , Pair _ new_ty <- coercionKind co1
@@ -1314,9 +1315,9 @@ simplCast env body co0 cont0
                                         -- See Note [Levity polymorphism invariants] in CoreSyn
                                         -- test: typecheck/should_run/EtaExpandLevPoly
           = {-#SCC "addCoerce-pushCoValArg" #-}
-            do { tail' <- addCoerceM m_co2 tail
+            do { tail' <- addCoerceM m_co2 $ toScont tail
                ; if isReflCo co1
-                 then return (cont { sc_cont = tail' })
+                 then return (toScont $ (fromScont cont) { sc_cont = fromScont tail' })
                       -- Avoid simplifying if possible;
                       -- See Note [Avoiding exponential behaviour]
                  else do
@@ -1326,16 +1327,14 @@ simplCast env body co0 cont0
                     -- to make it all consistent.  It's a bit messy.
                     -- But it isn't a common case.
                     -- Example of use: #995
-               ; return (ApplyToVal { sc_arg  = mkCast arg' co1
-                                    , sc_env  = arg_se'
-                                    , sc_dup  = dup'
-                                    , sc_cont = tail' }) } }
+               ; return (mkApplyToVal dup' (mkCast arg' co1) arg_se' tail')
+               } }
 
         addCoerce co cont
           | isReflexiveCo co = return cont  -- Having this at the end makes a huge
                                             -- difference in T12227, for some reason
                                             -- See Note [Optimising reflexivity]
-          | otherwise        = return (CastIt co cont)
+          | otherwise        = return (mkCastIt co cont)
 
 simplArg :: SimplEnv -> DupFlag -> StaticEnv -> CoreExpr
          -> SimplM (DupFlag, StaticEnv, OutExpr)
@@ -1360,22 +1359,22 @@ simplLam :: SimplEnv -> [InId] -> InExpr -> Scont
 simplLam env [] body cont
   = simplExprF env body cont
 
-simplLam env (bndr:bndrs) body (ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont })
+simplLam env (bndr:bndrs) body (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont })
   = do { tick (BetaReduction bndr)
-       ; simplLam (extendTvSubst env bndr arg_ty) bndrs body cont }
+       ; simplLam (extendTvSubst env bndr arg_ty) bndrs body $ toScont cont }
 
-simplLam env (bndr:bndrs) body (ApplyToVal { sc_arg = arg, sc_env = arg_se
+simplLam env (bndr:bndrs) body (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
                                            , sc_cont = cont, sc_dup = dup })
   | isSimplified dup  -- Don't re-simplify if we've simplified it once
                       -- See Note [Avoiding exponential behaviour]
   = do  { tick (BetaReduction bndr)
         ; (floats1, env') <- simplNonRecX env zapped_bndr arg
-        ; (floats2, expr') <- simplLam env' bndrs body cont
+        ; (floats2, expr') <- simplLam env' bndrs body $ toScont cont
         ; return (floats1 `addFloats` floats2, expr') }
 
   | otherwise
   = do  { tick (BetaReduction bndr)
-        ; simplNonRecE env zapped_bndr (arg, arg_se) (bndrs, body) cont }
+        ; simplNonRecE env zapped_bndr (arg, arg_se) (bndrs, body) $ toScont cont }
   where
     zapped_bndr  -- See Note [Zap unfolding when beta-reducing]
       | isId bndr = zapStableUnfolding bndr
@@ -1385,9 +1384,9 @@ simplLam env (bndr:bndrs) body (ApplyToVal { sc_arg = arg, sc_env = arg_se
       -- cost attribution slightly (moving the allocation of the
       -- lambda elsewhere), but we don't care: optimisation changes
       -- cost attribution all the time.
-simplLam env bndrs body (TickIt tickish cont)
+simplLam env bndrs body (fromScont -> TickIt tickish cont)
   | not (tickishCounts tickish)
-  = simplLam env bndrs body cont
+  = simplLam env bndrs body $ toScont cont
 
         -- Not enough args, so there are real lambdas left to put in the result
 simplLam env bndrs body cont
@@ -1460,8 +1459,7 @@ simplNonRecE env bndr (rhs, rhs_se) (bndrs, body) cont
   | isStrictId bndr          -- Includes coercions
   , sm_case_case (getMode env)
   = simplExprF (rhs_se `setInScopeFromE` env) rhs
-               (StrictBind { sc_bndr = bndr, sc_bndrs = bndrs, sc_body = body
-                           , sc_env = env, sc_cont = cont, sc_dup = NoDup })
+               (mkStrictBind NoDup bndr bndrs body env cont)
 
   -- Deal with lazy bindings
   | otherwise
@@ -1634,12 +1632,13 @@ trimJoinCont :: Id -> Maybe JoinArity -> Scont -> Scont
 trimJoinCont _ Nothing cont
   = cont -- Not a jump
 trimJoinCont var (Just arity) cont
-  = trim arity cont
+  = toScont $ trim arity $ fromScont cont
   where
+    trim :: Int -> SimplCont -> SimplCont
     trim 0 cont@(Stop {})
       = cont
     trim 0 cont
-      = mkBoringStop (contResultType cont)
+      = fromScont $ mkBoringStop (contResultType $ toScont cont)
     trim n cont@(ApplyToVal { sc_cont = k })
       = cont { sc_cont = trim (n-1) k }
     trim n cont@(ApplyToTy { sc_cont = k })
@@ -1853,24 +1852,24 @@ rebuildCall env info@(ArgInfo { ai_fun = fun, ai_args = rev_args
 
 
 ---------- Simplify applications and casts --------------
-rebuildCall env info (CastIt co cont)
-  = rebuildCall env (addCastTo info co) cont
+rebuildCall env info (fromScont -> CastIt co cont)
+  = rebuildCall env (addCastTo info co) $ toScont cont
 
-rebuildCall env info (ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont })
-  = rebuildCall env (addTyArgTo info arg_ty) cont
+rebuildCall env info (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont })
+  = rebuildCall env (addTyArgTo info arg_ty) $ toScont cont
 
 rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
                               , ai_strs = str:strs, ai_discs = disc:discs })
-            (ApplyToVal { sc_arg = arg, sc_env = arg_se
+            (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
                         , sc_dup = dup_flag, sc_cont = cont })
   | isSimplified dup_flag     -- See Note [Avoid redundant simplification]
-  = rebuildCall env (addValArgTo info' arg) cont
+  = rebuildCall env (addValArgTo info' arg) $ toScont cont
 
   | str         -- Strict argument
   , sm_case_case (getMode env)
   = -- pprTrace "Strict Arg" (ppr arg $$ ppr (seIdSubst env) $$ ppr (seInScope env)) $
     simplExprF (arg_se `setInScopeFromE` env) arg
-               (mkStrictArg Simplified info' cci_strict cont)
+               (mkStrictArg Simplified info' cci_strict $ toScont cont)
                 -- Note [Shadowing]
 
   | otherwise                           -- Lazy argument
@@ -1880,7 +1879,7 @@ rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
         -- floating a demanded let.
   = do  { arg' <- simplExprC (arg_se `setInScopeFromE` env) arg
                              (mkLazyArgStop arg_ty cci_lazy)
-        ; rebuildCall env (addValArgTo info' arg') cont }
+        ; rebuildCall env (addValArgTo info' arg') $ toScont cont }
   where
     info'  = info { ai_strs = strs, ai_discs = discs }
     arg_ty = funArgTy fun_ty

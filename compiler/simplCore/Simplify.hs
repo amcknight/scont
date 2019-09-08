@@ -3106,12 +3106,12 @@ mkDupableCont env scont = runScont scont
                                -- Note [Duplicated env]
               -- TODO(sandy): fix it
             ; return (all_floats
-                     , toScont $ Select { sc_dup  = OkToDup
-                              , sc_bndr = case_bndr'
-                              , sc_alts = alts''
-                              , sc_env  = zapSubstEnv se `setInScopeFromF` all_floats
+                     , mkSelect OkToDup
+                                case_bndr'
+                                alts''
+                                (zapSubstEnv se `setInScopeFromF` all_floats)
                                           -- See Note [StaticEnv invariant] in SimplUtils
-                              , sc_cont = fromScont $ mkBoringStop (contResultType cont) } ) })
+                                (mkBoringStop (contResultType cont)) ) })
 
   (\cont dup bndr bndrs body se _ -> returnIfContDupable env (mkStrictBind dup bndr bndrs body se cont) $
     -- See Note [Duplicating StrictBind]
@@ -3134,12 +3134,8 @@ mkDupableCont env scont = runScont scont
                                  floats    = emptyFloats env `extendFloats` join_bind
                            ; return (floats, join_call) }
            ; return ( floats2
-                    , toScont $ StrictBind { sc_bndr = bndr', sc_bndrs = []
-                                 , sc_body = body2
-                                 , sc_env  = zapSubstEnv se `setInScopeFromF` floats2
+                    , mkStrictBind OkToDup bndr' [] body2 (zapSubstEnv se `setInScopeFromF` floats2) (mkBoringStop res_ty))})
                                              -- See Note [StaticEnv invariant] in SimplUtils
-                                 , sc_dup  = OkToDup
-                                 , sc_cont = fromScont $ mkBoringStop res_ty } ) })
 
   (\jh dup info cci k -> returnIfContDupable env (mkStrictArg dup info cci jh) $
     -- See Note [Duplicating StrictArg]
@@ -3148,15 +3144,12 @@ mkDupableCont env scont = runScont scont
        ; (floats_s, args') <- mapAndUnzipM (makeTrivialArg (getMode env))
                                            (ai_args info)
        ; return ( foldl' addLetFloats floats1 floats_s
-                , toScont $ StrictArg { sc_fun = info { ai_args = args' }
-                            , sc_cci = cci
-                            , sc_cont = fromScont cont'
-                            , sc_dup = OkToDup} ) })
+                , mkStrictArg OkToDup (info { ai_args = args'}) cci cont')})
 
   -- Duplicating ticks for now, not sure if this is good or not
   (\jh t k -> returnIfContDupable env (mkTickIt t jh) $
     do  { (floats, cont') <- k
-        ; return (floats, toScont $ TickIt t $ fromScont cont') })
+        ; return (floats, mkTickIt t cont') })
 
 
 mkDupableAlt :: DynFlags -> OutId

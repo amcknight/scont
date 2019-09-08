@@ -56,6 +56,8 @@ import ErrUtils
 import Module          ( moduleName, pprModuleName )
 import PrimOp          ( PrimOp (SeqOp) )
 
+import GHC.Magic       ( oneShot )
+
 
 {-
 The guts of the simplifier is in this module, but the driver loop for
@@ -65,7 +67,7 @@ Note [The big picture]
 ~~~~~~~~~~~~~~~~~~~~~~
 The general shape of the simplifier is this:
 
-  simplExpr :: SimplEnv -> InExpr -> SimplCont -> SimplM (SimplFloats, OutExpr)
+  simplExpr :: SimplEnv -> InExpr -> Scont -> SimplM (SimplFloats, OutExpr)
   simplBind :: SimplEnv -> InBind -> SimplM (SimplFloats, SimplEnv)
 
  * SimplEnv contains
@@ -79,7 +81,7 @@ The general shape of the simplifier is this:
      - InScopeSet (including all the floats)
 
  * Expressions
-      simplExpr :: SimplEnv -> InExpr -> SimplCont
+      simplExpr :: SimplEnv -> InExpr -> Scont
                 -> SimplM (SimplFloats, OutExpr)
    The result of simplifying an /expression/ is (floats, expr)
       - A bunch of floats (let bindings, join bindings)
@@ -341,7 +343,7 @@ simplLazyBind env top_lvl is_rec bndr bndr1 rhs rhs_se
 
 --------------------------
 simplJoinBind :: SimplEnv
-              -> SimplCont
+              -> Scont
               -> InId -> OutId          -- Binder, both pre-and post simpl
                                         -- The OutId has IdInfo, except arity,
                                         --   unfolding
@@ -859,7 +861,7 @@ simplExpr env expr
 
 simplExprC :: SimplEnv
            -> InExpr     -- A term-valued expression, never (Type ty)
-           -> SimplCont
+           -> Scont
            -> SimplM OutExpr
         -- Simplify an expression, given a continuation
 simplExprC env expr cont
@@ -873,7 +875,7 @@ simplExprC env expr cont
 --------------------------------------------------
 simplExprF :: SimplEnv
            -> InExpr     -- A term-valued expression, never (Type ty)
-           -> SimplCont
+           -> Scont
            -> SimplM (SimplFloats, OutExpr)
 
 simplExprF env e cont
@@ -887,7 +889,7 @@ simplExprF env e cont
       ]) $ -}
     simplExprF1 env e cont
 
-simplExprF1 :: SimplEnv -> InExpr -> SimplCont
+simplExprF1 :: SimplEnv -> InExpr -> Scont
             -> SimplM (SimplFloats, OutExpr)
 
 simplExprF1 _ (Type ty) _
@@ -915,12 +917,10 @@ simplExprF1 env (App fun arg) cont
                     ; let hole' = substTy env (exprType fun)
 
                     ; simplExprF env fun $
-                      ApplyToTy { sc_arg_ty  = arg'
-                                , sc_hole_ty = hole'
-                                , sc_cont    = cont } }
+                      mkApplyToTy arg' hole' cont
+                    }
       _       -> simplExprF env fun $
-                 ApplyToVal { sc_arg = arg, sc_env = env
-                            , sc_dup = NoDup, sc_cont = cont }
+                 mkApplyToVal NoDup arg env cont
 
 simplExprF1 env expr@(Lam {}) cont
   = {-#SCC "simplExprF1-Lam" #-}
@@ -947,9 +947,7 @@ simplExprF1 env expr@(Lam {}) cont
 
 simplExprF1 env (Case scrut bndr _ alts) cont
   = {-#SCC "simplExprF1-Case" #-}
-    simplExprF env scrut (Select { sc_dup = NoDup, sc_bndr = bndr
-                                 , sc_alts = alts
-                                 , sc_env = env, sc_cont = cont })
+    simplExprF env scrut (mkSelect NoDup bndr alts env cont)
 
 simplExprF1 env (Let (Rec pairs) body) cont
   | Just pairs' <- joinPointBindings_maybe pairs
@@ -1000,8 +998,8 @@ OutTypes when it emits them into the output Core program, for example
 where the only difference from above is that simplType calls seqType
 on the result of substTy.
 
-However, SimplCont can also contain OutTypes and it's not necessarily
-a good idea to force types on the way in to SimplCont, because they
+However, Scont can also contain OutTypes and it's not necessarily
+a good idea to force types on the way in to Scont, because they
 may end up not being used and forcing them could be a lot of wasted
 work. T5631 is a good example of this.
 
@@ -1021,7 +1019,7 @@ work. T5631 is a good example of this.
 --   \x1 .. xn -> e => \x1 .. xn -> E[e]
 -- Note that we need the arity of the join point, since e may be a lambda
 -- (though this is unlikely). See Note [Case-of-case and join points].
-simplJoinRhs :: SimplEnv -> InId -> InExpr -> SimplCont
+simplJoinRhs :: SimplEnv -> InId -> InExpr -> Scont
              -> SimplM OutExpr
 simplJoinRhs env bndr expr cont
   | Just arity <- isJoinId_maybe bndr
@@ -1044,7 +1042,7 @@ simplType env ty
     new_ty = substTy env ty
 
 ---------------------------------
-simplCoercionF :: SimplEnv -> InCoercion -> SimplCont
+simplCoercionF :: SimplEnv -> InCoercion -> Scont
                -> SimplM (SimplFloats, OutExpr)
 simplCoercionF env co cont
   = do { co' <- simplCoercion env co
@@ -1061,7 +1059,7 @@ simplCoercion env co
 -- long as this is a non-scoping tick, to let case and application
 -- optimisations apply.
 
-simplTick :: SimplEnv -> Tickish Id -> InExpr -> SimplCont
+simplTick :: SimplEnv -> Tickish Id -> InExpr -> Scont
           -> SimplM (SimplFloats, OutExpr)
 simplTick env tickish expr cont
   -- A scoped tick turns into a continuation, so that we can spot
@@ -1160,7 +1158,7 @@ simplTick env tickish expr cont
     | otherwise = tickish
 
   -- Push type application and coercion inside a tick
-  splitCont :: SimplCont -> (SimplCont, SimplCont)
+  splitCont :: Scont -> (Scont, Scont)
   splitCont cont@(ApplyToTy { sc_cont = tail }) = (cont { sc_cont = inc }, outc)
     where (inc,outc) = splitCont tail
   splitCont (CastIt co c) = (CastIt co inc, outc)
@@ -1211,7 +1209,7 @@ simplTick env tickish expr cont
 ************************************************************************
 -}
 
-rebuild :: SimplEnv -> OutExpr -> SimplCont -> SimplM (SimplFloats, OutExpr)
+rebuild :: SimplEnv -> OutExpr -> Scont -> SimplM (SimplFloats, OutExpr)
 -- At this point the substitution in the SimplEnv should be irrelevant;
 -- only the in-scope set matters
 rebuild env expr cont
@@ -1279,7 +1277,7 @@ coercion shrinkage. See #15090.
 -}
 
 
-simplCast :: SimplEnv -> InExpr -> Coercion -> SimplCont
+simplCast :: SimplEnv -> InExpr -> Coercion -> Scont
           -> SimplM (SimplFloats, OutExpr)
 simplCast env body co0 cont0
   = do  { co1   <- {-#SCC "simplCast-simplCoercion" #-} simplCoercion env co0
@@ -1291,11 +1289,11 @@ simplCast env body co0 cont0
   where
         -- If the first parameter is MRefl, then simplifying revealed a
         -- reflexive coercion. Omit.
-        addCoerceM :: MOutCoercion -> SimplCont -> SimplM SimplCont
+        addCoerceM :: MOutCoercion -> Scont -> SimplM Scont
         addCoerceM MRefl   cont = return cont
         addCoerceM (MCo co) cont = addCoerce co cont
 
-        addCoerce :: OutCoercion -> SimplCont -> SimplM SimplCont
+        addCoerce :: OutCoercion -> Scont -> SimplM Scont
         addCoerce co1 (CastIt co2 cont)  -- See Note [Optimising reflexivity]
           | isReflexiveCo co' = return cont
           | otherwise         = addCoerce co' cont
@@ -1356,7 +1354,7 @@ simplArg env dup_flag arg_env arg
 ************************************************************************
 -}
 
-simplLam :: SimplEnv -> [InId] -> InExpr -> SimplCont
+simplLam :: SimplEnv -> [InId] -> InExpr -> Scont
          -> SimplM (SimplFloats, OutExpr)
 
 simplLam env [] body cont
@@ -1429,7 +1427,7 @@ simplNonRecE :: SimplEnv
              -> (InExpr, SimplEnv)      -- Rhs of binding (or arg of lambda)
              -> ([InBndr], InExpr)      -- Body of the let/lambda
                                         --      \xs.e
-             -> SimplCont
+             -> Scont
              -> SimplM (SimplFloats, OutExpr)
 
 -- simplNonRecE is used for
@@ -1478,7 +1476,7 @@ simplNonRecE env bndr (rhs, rhs_se) (bndrs, body) cont
 simplRecE :: SimplEnv
           -> [(InId, InExpr)]
           -> InExpr
-          -> SimplCont
+          -> Scont
           -> SimplM (SimplFloats, OutExpr)
 
 -- simplRecE is used for
@@ -1563,13 +1561,13 @@ is a join point, and what 'cont' is, in a value of type MaybeJoinCont
 of a SpecConstr-generated RULE for a join point.
 -}
 
-type MaybeJoinCont = Maybe SimplCont
+type MaybeJoinCont = Maybe Scont
   -- Nothing => Not a join point
   -- Just k  => This is a join binding with continuation k
   -- See Note [Rules and unfolding for join points]
 
 simplNonRecJoinPoint :: SimplEnv -> InId -> InExpr
-                     -> InExpr -> SimplCont
+                     -> InExpr -> Scont
                      -> SimplM (SimplFloats, OutExpr)
 simplNonRecJoinPoint env bndr rhs body cont
   | ASSERT( isJoinId bndr ) True
@@ -1591,7 +1589,7 @@ simplNonRecJoinPoint env bndr rhs body cont
 
 ------------------
 simplRecJoinPoint :: SimplEnv -> [(InId, InExpr)]
-                  -> InExpr -> SimplCont
+                  -> InExpr -> Scont
                   -> SimplM (SimplFloats, OutExpr)
 simplRecJoinPoint env pairs body cont
   = wrapJoinCont env cont $ \ env cont ->
@@ -1605,8 +1603,8 @@ simplRecJoinPoint env pairs body cont
        ; return (floats1 `addFloats` floats2, body') }
 
 --------------------
-wrapJoinCont :: SimplEnv -> SimplCont
-             -> (SimplEnv -> SimplCont -> SimplM (SimplFloats, OutExpr))
+wrapJoinCont :: SimplEnv -> Scont
+             -> (SimplEnv -> Scont -> SimplM (SimplFloats, OutExpr))
              -> SimplM (SimplFloats, OutExpr)
 -- Deal with making the continuation duplicable if necessary,
 -- and with the no-case-of-case situation.
@@ -1629,7 +1627,7 @@ wrapJoinCont env cont thing_inside
 
 
 --------------------
-trimJoinCont :: Id -> Maybe JoinArity -> SimplCont -> SimplCont
+trimJoinCont :: Id -> Maybe JoinArity -> Scont -> Scont
 -- Drop outer context from join point invocation (jump)
 -- See Note [Join points and case-of-case]
 
@@ -1740,7 +1738,7 @@ simplVar env var
         DoneId var1          -> return (Var var1)
         DoneEx e _           -> return e
 
-simplIdF :: SimplEnv -> InId -> SimplCont -> SimplM (SimplFloats, OutExpr)
+simplIdF :: SimplEnv -> InId -> Scont -> SimplM (SimplFloats, OutExpr)
 simplIdF env var cont
   = case substId env var of
       ContEx tvs cvs ids e -> simplExprF (setSubstEnv env tvs cvs ids) e cont
@@ -1763,7 +1761,7 @@ simplIdF env var cont
 ---------------------------------------------------------
 --      Dealing with a call site
 
-completeCall :: SimplEnv -> OutId -> SimplCont -> SimplM (SimplFloats, OutExpr)
+completeCall :: SimplEnv -> OutId -> Scont -> SimplM (SimplFloats, OutExpr)
 completeCall env var cont
   | Just expr <- callSiteInline dflags var active_unf
                                 lone_variable arg_infos interesting_cont
@@ -1800,7 +1798,7 @@ completeCall env var cont
 
 rebuildCall :: SimplEnv
             -> ArgInfo
-            -> SimplCont
+            -> Scont
             -> SimplM (SimplFloats, OutExpr)
 -- We decided not to inline, so
 --    - simplify the arguments
@@ -1842,10 +1840,16 @@ rebuildCall env info@(ArgInfo { ai_fun = fun, ai_args = rev_args
              Just (env', rhs, cont') -> simplExprF env' rhs cont'
              Nothing                 -> rebuildCall env info' cont }
   where
-    no_more_args = case cont of
-                      ApplyToTy  {} -> False
-                      ApplyToVal {} -> False
-                      _             -> True
+    no_more_args =
+      runScont cont
+        (oneShot $ \_ _         -> True)   -- Stop
+        (oneShot $ \_ _         -> True)   -- CastIt
+        (oneShot $ \_ _ _ _     -> False)  -- ApplyToVal
+        (oneShot $ \_ _ _       -> False)  -- ApplyToTy
+        (oneShot $ \_ _ _ _ _   -> True)   -- Select
+        (oneShot $ \_ _ _ _ _ _ -> True)   -- StrictBind
+        (oneShot $ \_ _ _ _     -> True)   -- StrictArg
+        (oneShot $ \_ _         -> True)   -- TickIt
 
 
 ---------- Simplify applications and casts --------------
@@ -1866,8 +1870,7 @@ rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
   , sm_case_case (getMode env)
   = -- pprTrace "Strict Arg" (ppr arg $$ ppr (seIdSubst env) $$ ppr (seInScope env)) $
     simplExprF (arg_se `setInScopeFromE` env) arg
-               (StrictArg { sc_fun = info', sc_cci = cci_strict
-                          , sc_dup = Simplified, sc_cont = cont })
+               (mkStrictArg Simplified info' cci_strict cont)
                 -- Note [Shadowing]
 
   | otherwise                           -- Lazy argument
@@ -1980,8 +1983,8 @@ all this at once is TOO HARD!
 
 tryRules :: SimplEnv -> [CoreRule]
          -> Id -> [ArgSpec]
-         -> SimplCont
-         -> SimplM (Maybe (SimplEnv, CoreExpr, SimplCont))
+         -> Scont
+         -> SimplM (Maybe (SimplEnv, CoreExpr, Scont))
 
 tryRules env rules fn args call_cont
   | null rules
@@ -2072,8 +2075,8 @@ tryRules env rules fn args call_cont
 
 trySeqRules :: SimplEnv
             -> OutExpr -> InExpr   -- Scrutinee and RHS
-            -> SimplCont
-            -> SimplM (Maybe (SimplEnv, CoreExpr, SimplCont))
+            -> Scont
+            -> SimplM (Maybe (SimplEnv, CoreExpr, Scont))
 -- See Note [User-defined RULES for seq]
 trySeqRules in_env scrut rhs cont
   = do { rule_base <- getSimplRules
@@ -2088,8 +2091,7 @@ trySeqRules in_env scrut rhs cont
                 , TyArg { as_arg_ty  = rhs_ty
                        , as_hole_ty  = piResultTy seq_id_ty scrut_ty }
                 , ValArg no_cast_scrut]
-    rule_cont = ApplyToVal { sc_dup = NoDup, sc_arg = rhs
-                           , sc_env = in_env, sc_cont = cont }
+    rule_cont = mkApplyToVal NoDup rhs in_env cont
     -- Lazily evaluated, so we don't do most of this
 
     drop_casts (Cast e _) = drop_casts e
@@ -2420,7 +2422,7 @@ rebuildCase, reallyRebuildCase
    -> OutExpr          -- Scrutinee
    -> InId             -- Case binder
    -> [InAlt]          -- Alternatives (increasing order)
-   -> SimplCont
+   -> Scont
    -> SimplM (SimplFloats, OutExpr)
 
 --------------------------------------------------
@@ -2633,7 +2635,7 @@ simplAlts :: SimplEnv
           -> OutExpr         -- Scrutinee
           -> InId            -- Case binder
           -> [InAlt]         -- Non-empty
-          -> SimplCont
+          -> Scont
           -> SimplM OutExpr  -- Returns the complete simplified case expression
 
 simplAlts env0 scrut case_bndr alts cont'
@@ -2684,7 +2686,7 @@ simplAlt :: SimplEnv
          -> [AltCon]       -- These constructors can't be present when
                            -- matching the DEFAULT alternative
          -> OutId          -- The case binder
-         -> SimplCont
+         -> Scont
          -> InAlt
          -> SimplM OutAlt
 
@@ -2895,7 +2897,7 @@ knownCon :: SimplEnv
          -> OutExpr                                           -- The scrutinee
          -> [FloatBind] -> DataCon -> [OutType] -> [OutExpr]  -- The scrutinee (in pieces)
          -> InId -> [InBndr] -> InExpr                        -- The alternative
-         -> SimplCont
+         -> Scont
          -> SimplM (SimplFloats, OutExpr)
 
 knownCon env scrut dc_floats dc dc_ty_args dc_args bndr bs rhs cont
@@ -2960,7 +2962,7 @@ knownCon env scrut dc_floats dc dc_ty_args dc_args bndr bs rhs cont
                                  ; simplNonRecX env bndr con_app }
 
 -------------------
-missingAlt :: SimplEnv -> Id -> [InAlt] -> SimplCont
+missingAlt :: SimplEnv -> Id -> [InAlt] -> Scont
            -> SimplM (SimplFloats, OutExpr)
                 -- This isn't strictly an error, although it is unusual.
                 -- It's possible that the simplifier might "see" that
@@ -3014,8 +3016,8 @@ join points and inlining them away.  See #4930.
 -}
 
 --------------------
-mkDupableCaseCont :: SimplEnv -> [InAlt] -> SimplCont
-                  -> SimplM (SimplFloats, SimplCont)
+mkDupableCaseCont :: SimplEnv -> [InAlt] -> Scont
+                  -> SimplM (SimplFloats, Scont)
 mkDupableCaseCont env alts cont
   | altsWouldDup alts = mkDupableCont env cont
   | otherwise         = return (emptyFloats env, cont)
@@ -3030,134 +3032,152 @@ altsWouldDup (alt:alts)
     is_bot_alt (_,_,rhs) = exprIsBottom rhs
 
 -------------------------
-mkDupableCont :: SimplEnv -> SimplCont
+mkDupableCont :: SimplEnv -> Scont
               -> SimplM ( SimplFloats  -- Incoming SimplEnv augmented with
                                        --   extra let/join-floats and in-scope variables
-                        , SimplCont)   -- dup_cont: duplicable continuation
+                        , Scont)   -- dup_cont: duplicable continuation
 
 mkDupableCont env cont
   | contIsDupable cont
   = return (emptyFloats env, cont)
 
-mkDupableCont _ (Stop {}) = panic "mkDupableCont"     -- Handled by previous eqn
 
-mkDupableCont env (CastIt ty cont)
-  = do  { (floats, cont') <- mkDupableCont env cont
-        ; return (floats, CastIt ty cont') }
+mkDupableCont env cont =
+  runScont cont
+    (oneShot $ \_ _         -> panic "mkDupableCont"     -- Handled by previous eqn
+      )  -- Stop
 
--- Duplicating ticks for now, not sure if this is good or not
-mkDupableCont env (TickIt t cont)
-  = do  { (floats, cont') <- mkDupableCont env cont
-        ; return (floats, TickIt t cont') }
+    (oneShot $ \ty k     ->
+       do  { (floats, cont') <- k
+           ; return (floats, mkCastIt ty cont')
+           }
+      )  -- CastIt
 
-mkDupableCont env (StrictBind { sc_bndr = bndr, sc_bndrs = bndrs
-                              , sc_body = body, sc_env = se, sc_cont = cont})
-  -- See Note [Duplicating StrictBind]
-  = do { let sb_env = se `setInScopeFromE` env
-       ; (sb_env1, bndr') <- simplBinder sb_env bndr
-       ; (floats1, join_inner) <- simplLam sb_env1 bndrs body cont
-          -- No need to use mkDupableCont before simplLam; we
-          -- use cont once here, and then share the result if necessary
-
-       ; let join_body = wrapFloats floats1 join_inner
-             res_ty    = contResultType cont
-
-       ; (floats2, body2)
-            <- if exprIsDupable (seDynFlags env) join_body
-               then return (emptyFloats env, join_body)
-               else do { join_bndr <- newJoinId [bndr'] res_ty
-                       ; let join_call = App (Var join_bndr) (Var bndr')
-                             join_rhs  = Lam (setOneShotLambda bndr') join_body
-                             join_bind = NonRec join_bndr join_rhs
-                             floats    = emptyFloats env `extendFloats` join_bind
-                       ; return (floats, join_call) }
-       ; return ( floats2
-                , StrictBind { sc_bndr = bndr', sc_bndrs = []
-                             , sc_body = body2
-                             , sc_env  = zapSubstEnv se `setInScopeFromF` floats2
-                                         -- See Note [StaticEnv invariant] in SimplUtils
-                             , sc_dup  = OkToDup
-                             , sc_cont = mkBoringStop res_ty } ) }
-
-mkDupableCont env (StrictArg { sc_fun = info, sc_cci = cci, sc_cont = cont })
-        -- See Note [Duplicating StrictArg]
-        -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
-  = do { (floats1, cont') <- mkDupableCont env cont
-       ; (floats_s, args') <- mapAndUnzipM (makeTrivialArg (getMode env))
-                                           (ai_args info)
-       ; return ( foldl' addLetFloats floats1 floats_s
-                , StrictArg { sc_fun = info { ai_args = args' }
-                            , sc_cci = cci
-                            , sc_cont = cont'
-                            , sc_dup = OkToDup} ) }
-
-mkDupableCont env (ApplyToTy { sc_cont = cont
-                             , sc_arg_ty = arg_ty, sc_hole_ty = hole_ty })
-  = do  { (floats, cont') <- mkDupableCont env cont
-        ; return (floats, ApplyToTy { sc_cont = cont'
-                                    , sc_arg_ty = arg_ty, sc_hole_ty = hole_ty }) }
-
-mkDupableCont env (ApplyToVal { sc_arg = arg, sc_dup = dup
-                              , sc_env = se, sc_cont = cont })
-  =     -- e.g.         [...hole...] (...arg...)
+    (oneShot $ \dup arg se k ->
+        -- e.g.         [...hole...] (...arg...)
         --      ==>
         --              let a = ...arg...
         --              in [...hole...] a
         -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
-    do  { (floats1, cont') <- mkDupableCont env cont
-        ; let env' = env `setInScopeFromF` floats1
-        ; (_, se', arg') <- simplArg env' dup se arg
-        ; (let_floats2, arg'') <- makeTrivial (getMode env) NotTopLevel (fsLit "karg") arg'
-        ; let all_floats = floats1 `addLetFloats` let_floats2
-        ; return ( all_floats
-                 , ApplyToVal { sc_arg = arg''
-                              , sc_env = se' `setInScopeFromF` all_floats
-                                         -- Ensure that sc_env includes the free vars of
-                                         -- arg'' in its in-scope set, even if makeTrivial
-                                         -- has turned arg'' into a fresh variable
-                                         -- See Note [StaticEnv invariant] in SimplUtils
-                              , sc_dup = OkToDup, sc_cont = cont' }) }
+        do  { (floats1, cont') <- k
+            ; let env' = env `setInScopeFromF` floats1
+            ; (_, se', arg') <- simplArg env' dup se arg
+            ; (let_floats2, arg'') <- makeTrivial (getMode env) NotTopLevel (fsLit "karg") arg'
+            ; let all_floats = floats1 `addLetFloats` let_floats2
+            ; return ( all_floats
+                     , mkApplyToVal OkToDup
+                                    arg''
+                                    (se' `setInScopeFromF` all_floats)
+                                             -- Ensure that sc_env includes the free vars of
+                                             -- arg'' in its in-scope set, even if makeTrivial
+                                             -- has turned arg'' into a fresh variable
+                                             -- See Note [StaticEnv invariant] in SimplUtils
+                                    cont' )
+            }
+      )  -- ApplyToVal
 
-mkDupableCont env (Select { sc_bndr = case_bndr, sc_alts = alts
-                          , sc_env = se, sc_cont = cont })
-  =     -- e.g.         (case [...hole...] of { pi -> ei })
+    (oneShot $ \arg_ty hole_ty k ->
+        do  { (floats, cont') <- k
+            ; return (floats, mkApplyToTy arg_ty hole_ty cont')
+            }
+      )  -- ApplyToTy
+
+    (oneShot $ \_ case_bndr alts se k ->
+        -- e.g.         (case [...hole...] of { pi -> ei })
         --      ===>
         --              let ji = \xij -> ei
         --              in case [...hole...] of { pi -> ji xij }
         -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
-    do  { tick (CaseOfCase case_bndr)
-        ; (floats, alt_cont) <- mkDupableCaseCont env alts cont
-                -- NB: We call mkDupableCaseCont here to make cont duplicable
-                --     (if necessary, depending on the number of alts)
-                -- And this is important: see Note [Fusing case continuations]
+        do  { tick (CaseOfCase case_bndr)
+            ; (floats, alt_cont) <- k
+                    -- NB: We call mkDupableCaseCont here to make cont duplicable
+                    --     (if necessary, depending on the number of alts)
+                    -- And this is important: see Note [Fusing case continuations]
 
-        ; let alt_env = se `setInScopeFromF` floats
-        ; (alt_env', case_bndr') <- simplBinder alt_env case_bndr
-        ; alts' <- mapM (simplAlt alt_env' Nothing [] case_bndr' alt_cont) alts
-        -- Safe to say that there are no handled-cons for the DEFAULT case
-                -- NB: simplBinder does not zap deadness occ-info, so
-                -- a dead case_bndr' will still advertise its deadness
-                -- This is really important because in
-                --      case e of b { (# p,q #) -> ... }
-                -- b is always dead, and indeed we are not allowed to bind b to (# p,q #),
-                -- which might happen if e was an explicit unboxed pair and b wasn't marked dead.
-                -- In the new alts we build, we have the new case binder, so it must retain
-                -- its deadness.
-        -- NB: we don't use alt_env further; it has the substEnv for
-        --     the alternatives, and we don't want that
+            ; let alt_env = se `setInScopeFromF` floats
+            ; (alt_env', case_bndr') <- simplBinder alt_env case_bndr
+            ; alts' <- mapM (simplAlt alt_env' Nothing [] case_bndr' alt_cont) alts
+            -- Safe to say that there are no handled-cons for the DEFAULT case
+                    -- NB: simplBinder does not zap deadness occ-info, so
+                    -- a dead case_bndr' will still advertise its deadness
+                    -- This is really important because in
+                    --      case e of b { (# p,q #) -> ... }
+                    -- b is always dead, and indeed we are not allowed to bind b to (# p,q #),
+                    -- which might happen if e was an explicit unboxed pair and b wasn't marked dead.
+                    -- In the new alts we build, we have the new case binder, so it must retain
+                    -- its deadness.
+            -- NB: we don't use alt_env further; it has the substEnv for
+            --     the alternatives, and we don't want that
 
-        ; (join_floats, alts'') <- mapAccumLM (mkDupableAlt (seDynFlags env) case_bndr')
-                                              emptyJoinFloats alts'
+            ; (join_floats, alts'') <- mapAccumLM (mkDupableAlt (seDynFlags env) case_bndr')
+                                                  emptyJoinFloats alts'
 
-        ; let all_floats = floats `addJoinFloats` join_floats
-                           -- Note [Duplicated env]
-        ; return (all_floats
-                 , Select { sc_dup  = OkToDup
-                          , sc_bndr = case_bndr'
-                          , sc_alts = alts''
-                          , sc_env  = zapSubstEnv se `setInScopeFromF` all_floats
-                                      -- See Note [StaticEnv invariant] in SimplUtils
-                          , sc_cont = mkBoringStop (contResultType cont) } ) }
+            ; let all_floats = floats `addJoinFloats` join_floats
+                               -- Note [Duplicated env]
+            ; return (all_floats
+                     , mkSelect OkToDup
+                                case_bndr'
+                                alts''
+                                (zapSubstEnv se `setInScopeFromF` all_floats)
+                                            -- See Note [StaticEnv invariant] in SimplUtils
+                                $ mkBoringStop (contResultType cont) )
+            }
+      )  -- Select
+
+    (oneShot $ \dup bndr bndrs body se k ->
+         -- See Note [Duplicating StrictBind]
+         do { (_, cont) <- k
+            ; let sb_env = se `setInScopeFromE` env
+            ; (sb_env1, bndr') <- simplBinder sb_env bndr
+            ; (floats1, join_inner) <- simplLam sb_env1 bndrs body cont
+               -- No need to use mkDupableCont before simplLam; we
+               -- use cont once here, and then share the result if necessary
+
+            ; let join_body = wrapFloats floats1 join_inner
+                  res_ty    = contResultType cont
+
+            ; (floats2, body2)
+                 <- if exprIsDupable (seDynFlags env) join_body
+                    then return (emptyFloats env, join_body)
+                    else do { join_bndr <- newJoinId [bndr'] res_ty
+                            ; let join_call = App (Var join_bndr) (Var bndr')
+                                  join_rhs  = Lam (setOneShotLambda bndr') join_body
+                                  join_bind = NonRec join_bndr join_rhs
+                                  floats    = emptyFloats env `extendFloats` join_bind
+                            ; return (floats, join_call) }
+            ; return ( floats2
+                     , mkStrictBind OkToDup
+                                    bndr'
+                                    []
+                                    body2
+                                    (zapSubstEnv se `setInScopeFromF` floats2)
+                                              -- See Note [StaticEnv invariant] in SimplUtils
+                                    (mkBoringStop res_ty ) )
+            }
+      )  -- StrictBind
+
+    (oneShot $ \_ info cci k ->
+        -- See Note [Duplicating StrictArg]
+        -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
+         do { (floats1, cont') <- k
+            ; (floats_s, args') <- mapAndUnzipM (makeTrivialArg (getMode env))
+                                                (ai_args info)
+            ; return ( foldl' addLetFloats floats1 floats_s
+                     , mkStrictArg OkToDup
+                                   info { ai_args = args' }
+                                   cci
+                                   cont'
+                     )
+            }
+      )  -- StrictArg
+
+    (oneShot $ \t k      ->
+        -- Duplicating ticks for now, not sure if this is good or not
+        do  { (floats, cont') <- k
+            ; return (floats, mkTickIt t cont')
+            }
+      )  -- TickIt
+
 
 mkDupableAlt :: DynFlags -> OutId
              -> JoinFloats -> OutAlt

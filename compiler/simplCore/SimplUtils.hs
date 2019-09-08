@@ -153,15 +153,19 @@ mkTickIt m r = Scont $ \a b c d e f g h -> h m         $ runScont r a b c d e f 
 
 
 
-newtype Scont = Scont {runScont :: forall r.(OutType -> CallCtxt -> r) -- Stop
-              -> (OutCoercion -> r -> r) -- CastIt
-              -> (DupFlag -> InExpr -> StaticEnv -> r -> r) -- ApplyToVal
-              -> (OutType -> OutType -> r -> r) -- ApplyToTy
-              -> (DupFlag -> InId -> [InAlt] -> StaticEnv -> r -> r) -- Select
-              -> (DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> r -> r) -- StrictBind
-              -> (DupFlag -> ArgInfo -> CallCtxt -> r -> r) -- StrictArg
-              -> (Tickish Id -> r -> r) -- TickIt
-              -> r}
+newtype Scont = Scont
+  { runScont
+    :: forall r
+     . (OutType -> CallCtxt -> r)                                      -- Stop
+    -> (OutCoercion -> r -> r)                                         -- CastIt
+    -> (DupFlag -> InExpr -> StaticEnv -> r -> r)                      -- ApplyToVal
+    -> (OutType -> OutType -> r -> r)                                  -- ApplyToTy
+    -> (DupFlag -> InId -> [InAlt] -> StaticEnv -> r -> r)             -- Select
+    -> (DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> r -> r)  -- StrictBind
+    -> (DupFlag -> ArgInfo -> CallCtxt -> r -> r)                      -- StrictArg
+    -> (Tickish Id -> r -> r)                                          -- TickIt
+    -> r
+  }
 
 data SimplCont
   = Stop                -- Stop[e] = e

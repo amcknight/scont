@@ -536,8 +536,8 @@ contArgs :: Scont -> (Bool, [ArgSummary], Scont)
 contArgs cont
   | lone cont = (True, [], cont)
   | otherwise =
-      let (a, b, c) = go [] cont
-       in (a, reverse b, c)
+      let b = go cont
+       in (False, reverse b, cont)
   where
     lone s =
       runScont s
@@ -550,18 +550,20 @@ contArgs cont
         (\_ _ _ _     -> True)   -- StrictArg
         (\_ _         -> True)   -- TickIt
 
-    go args s =
+    go s =
       runScont s
-        (\a b         -> (False, args, mkStop a b))  -- Stop
+        (\a b         -> [])  -- Stop
         (\a b         -> b)  -- CastIt
-        (\a arg se k  -> (False, is_interesting arg se : args, mkApplyToVal a arg se $ thd k))  -- ApplyToVal
+        (\a arg se k  ->
+          let (y) = k
+           in is_interesting arg se : y
+          )
+          -- ApplyToVal
         (\a b c       -> c)  -- ApplyToTy
-        (\a b c d e   -> (False, args, mkSelect a b c d $ thd e))  -- Select
-        (\a b c d e f -> (False, args, mkStrictBind a b c d e $ thd f))  -- StrictBind
-        (\a b c d     -> (False, args, mkStrictArg a b c $ thd d))  -- StrictArg
-        (\a b         -> (False, args, mkTickIt a $ thd b))  -- TickIt
-
-    thd (a, b, c) = c
+        (\a b c d e   -> [])  -- Select
+        (\a b c d e f -> [])  -- StrictBind
+        (\a b c d     -> [])  -- StrictArg
+        (\a b         -> [])  -- TickIt
 
     is_interesting arg se = interestingArg se arg
                    -- Do *not* use short-cutting substitution here

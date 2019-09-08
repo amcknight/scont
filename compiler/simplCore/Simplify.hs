@@ -3030,17 +3030,16 @@ altsWouldDup (alt:alts)
     is_bot_alt (_,_,rhs) = exprIsBottom rhs
 
 -------------------------
-mkDupableCont :: SimplEnv -> Scont
-              -> SimplM ( SimplFloats  -- Incoming SimplEnv augmented with
-                                       --   extra let/join-floats and in-scope variables
-                        , Scont)   -- dup_cont: duplicable continuation
-
 returnIfContDupable :: Monad m => SimplEnv -> SimplCont -> m (SimplFloats, Scont) -> m (SimplFloats, Scont)
 returnIfContDupable env cont m
   = if contIsDupable $ toScont cont
       then return (emptyFloats env, toScont cont)
       else m
 
+mkDupableCont :: SimplEnv -> Scont
+              -> SimplM ( SimplFloats  -- Incoming SimplEnv augmented with
+                                       --   extra let/join-floats and in-scope variables
+                        , Scont)   -- dup_cont: duplicable continuation
 mkDupableCont env scont = case fromScont scont of
   jh@(Stop {}) -> returnIfContDupable env jh $ panic "mkDupableCont"     -- Handled by previous eqn
   jh@(CastIt ty cont) -> returnIfContDupable env jh $
@@ -3048,10 +3047,10 @@ mkDupableCont env scont = case fromScont scont of
         ; return (floats, toScont $ CastIt ty $ fromScont cont') }
   jh@(ApplyToVal { sc_arg = arg, sc_dup = dup, sc_env = se, sc_cont = cont }) -> returnIfContDupable env jh $
      -- e.g.         [...hole...] (...arg...)
-        --      ==>
-        --              let a = ...arg...
-        --              in [...hole...] a
-        -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
+     --      ==>
+     --              let a = ...arg...
+     --              in [...hole...] a
+     -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
     do  { (floats1, cont') <- mkDupableCont env $ toScont cont
         ; let env' = env `setInScopeFromF` floats1
         ; (_, se', arg') <- simplArg env' dup se arg

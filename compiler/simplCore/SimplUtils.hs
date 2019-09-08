@@ -429,26 +429,26 @@ mkLazyArgStop ty cci = mkStop ty cci
 contIsRhsOrArg :: Scont -> Bool
 contIsRhsOrArg s =
   runScont s
-    (\_ _         -> True)
-    (\_ _         -> False)
-    (\_ _ _ _     -> False)
-    (\_ _ _       -> False)
-    (\_ _ _ _ _   -> False)
-    (\_ _ _ _ _ _ -> True)
-    (\_ _ _ _     -> True)
-    (\_ _         -> False)
+    (\_ _         -> True)    -- Stop
+    (\_ _         -> False)   -- CastIt
+    (\_ _ _ _     -> False)   -- ApplyToVal
+    (\_ _ _       -> False)   -- ApplyToTy
+    (\_ _ _ _ _   -> False)   -- Select
+    (\_ _ _ _ _ _ -> True)    -- StrictBind
+    (\_ _ _ _     -> True)    -- StrictArg
+    (\_ _         -> False)   -- TickIt
 
 contIsRhs :: Scont -> Bool
 contIsRhs s =
   runScont s
-    (\_ a         -> case a of {RhsCtxt -> True; _ -> False})
-    (\_ _         -> False)
-    (\_ _ _ _     -> False)
-    (\_ _ _       -> False)
-    (\_ _ _ _ _   -> False)
-    (\_ _ _ _ _ _ -> False)
-    (\_ _ _ _     -> False)
-    (\_ _         -> False)
+    (\_ a         -> case a of {RhsCtxt -> True; _ -> False})  -- Stop
+    (\_ _         -> False)                                    -- CastIt
+    (\_ _ _ _     -> False)                                    -- ApplyToVal
+    (\_ _ _       -> False)                                    -- ApplyToTy
+    (\_ _ _ _ _   -> False)                                    -- Select
+    (\_ _ _ _ _ _ -> False)                                    -- StrictBind
+    (\_ _ _ _     -> False)                                    -- StrictArg
+    (\_ _         -> False)                                    -- TickIt
 
 -------------------
 contIsStop :: Scont -> Bool

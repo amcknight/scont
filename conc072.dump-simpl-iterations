@@ -1,0 +1,1619 @@
+
+==================== Simplifier iteration=1 ====================
+2019-09-08 20:01:04.057839 UTC
+  ---- Simplifier counts for Simplifier iteration=1
+  Total ticks: 149
+  ---- End of simplifier counts for Simplifier iteration=1
+Result size of Simplifier iteration=1
+  = {terms: 109, types: 151, coercions: 19, joins: 0/4}
+
+-- RHS size: {terms: 3, types: 2, coercions: 0, joins: 0/0}
+$dShow :: Show (Int, Bool)
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=False, Value=False, ConLike=True,
+         WorkFree=False, Expandable=True, Guidance=IF_ARGS [] 30 0}]
+$dShow
+  = GHC.Show.$fShow(,)
+      @ Int @ Bool GHC.Show.$fShowInt GHC.Show.$fShowBool
+
+-- RHS size: {terms: 83, types: 115, coercions: 10, joins: 0/4}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [0] 392 0}]
+main
+  = \ (s :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             0#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             s
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      let {
+        ipv1 :: Int
+        [LclId,
+         Unf=Unf{Src=<vanilla>, TopLvl=False, Value=True, ConLike=True,
+                 WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+        ipv1 = GHC.Types.I# ipv2 } in
+      let {
+        ipv1 :: Bool
+        [LclId,
+         Unf=Unf{Src=<vanilla>, TopLvl=False, Value=False, ConLike=False,
+                 WorkFree=True, Expandable=False, Guidance=IF_ARGS [] 20 20}]
+        ipv1
+          = case ipv3 of {
+              __DEFAULT -> GHC.Types.True;
+              0# -> GHC.Types.False
+            } } in
+      case ((GHC.IO.Handle.Text.hPutStr'
+               GHC.IO.Handle.FD.stdout
+               (GHC.Show.$fShow(,)_$cshowsPrec
+                  @ Int
+                  @ Bool
+                  GHC.Show.$fShowInt
+                  GHC.Show.$fShowBool
+                  GHC.Show.$fShow(,)1
+                  (ipv1, ipv1)
+                  (GHC.Types.[] @ Char))
+               GHC.Types.True)
+            `cast` (GHC.Types.N:IO[0] <()>_R
+                    :: IO ()
+                       ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                            -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             1#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      let {
+        ipv1 :: Int
+        [LclId,
+         Unf=Unf{Src=<vanilla>, TopLvl=False, Value=True, ConLike=True,
+                 WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+        ipv1 = GHC.Types.I# ipv2 } in
+      let {
+        ipv1 :: Bool
+        [LclId,
+         Unf=Unf{Src=<vanilla>, TopLvl=False, Value=False, ConLike=False,
+                 WorkFree=True, Expandable=False, Guidance=IF_ARGS [] 20 20}]
+        ipv1
+          = case ipv3 of {
+              __DEFAULT -> GHC.Types.True;
+              0# -> GHC.Types.False
+            } } in
+      ((GHC.IO.Handle.Text.hPutStr'
+          GHC.IO.Handle.FD.stdout
+          (GHC.Show.$fShow(,)_$cshowsPrec
+             @ Int
+             @ Bool
+             GHC.Show.$fShowInt
+             GHC.Show.$fShowBool
+             GHC.Show.$fShow(,)1
+             (ipv1, ipv1)
+             (GHC.Types.[] @ Char))
+          GHC.Types.True)
+       `cast` (GHC.Types.N:IO[0] <()>_R
+               :: IO ()
+                  ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                       -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+        ipv
+      }
+      }
+      }
+      }
+      }
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 2, types: 1, coercions: 3, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 60}]
+main
+  = GHC.TopHandler.runMainIO1
+      @ ()
+      (main
+       `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+               :: (GHC.Prim.State# GHC.Prim.RealWorld
+                   -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                  ~R# IO ()))
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+:Main.main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+:Main.main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "Main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 3, types: 0, coercions: 0, joins: 0/0}
+Main.$trModule :: GHC.Types.Module
+[LclIdX,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+Main.$trModule = GHC.Types.Module $trModule $trModule
+
+
+
+==================== Simplifier iteration=2 ====================
+2019-09-08 20:01:04.07261 UTC
+  ---- Simplifier counts for Simplifier iteration=2
+  Total ticks: 4
+  ---- End of simplifier counts for Simplifier iteration=2
+Result size of Simplifier iteration=2
+  = {terms: 97, types: 141, coercions: 19, joins: 0/0}
+
+-- RHS size: {terms: 75, types: 111, coercions: 10, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [0] 352 0}]
+main
+  = \ (s :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             0#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s [OS=OneShot] :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             s
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      case ((GHC.IO.Handle.Text.hPutStr'
+               GHC.IO.Handle.FD.stdout
+               (GHC.Show.$fShow(,)_$cshowsPrec
+                  @ Int
+                  @ Bool
+                  GHC.Show.$fShowInt
+                  GHC.Show.$fShowBool
+                  GHC.Show.$fShow(,)1
+                  (GHC.Types.I# ipv2,
+                   case ipv3 of {
+                     __DEFAULT -> GHC.Types.True;
+                     0# -> GHC.Types.False
+                   })
+                  (GHC.Types.[] @ Char))
+               GHC.Types.True)
+            `cast` (GHC.Types.N:IO[0] <()>_R
+                    :: IO ()
+                       ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                            -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             1#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s [OS=OneShot] :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      ((GHC.IO.Handle.Text.hPutStr'
+          GHC.IO.Handle.FD.stdout
+          (GHC.Show.$fShow(,)_$cshowsPrec
+             @ Int
+             @ Bool
+             GHC.Show.$fShowInt
+             GHC.Show.$fShowBool
+             GHC.Show.$fShow(,)1
+             (GHC.Types.I# ipv2,
+              case ipv3 of {
+                __DEFAULT -> GHC.Types.True;
+                0# -> GHC.Types.False
+              })
+             (GHC.Types.[] @ Char))
+          GHC.Types.True)
+       `cast` (GHC.Types.N:IO[0] <()>_R
+               :: IO ()
+                  ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                       -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+        ipv
+      }
+      }
+      }
+      }
+      }
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 2, types: 1, coercions: 3, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 60}]
+main
+  = GHC.TopHandler.runMainIO1
+      @ ()
+      (main
+       `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+               :: (GHC.Prim.State# GHC.Prim.RealWorld
+                   -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                  ~R# IO ()))
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+:Main.main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+:Main.main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "Main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 3, types: 0, coercions: 0, joins: 0/0}
+Main.$trModule :: GHC.Types.Module
+[LclIdX,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+Main.$trModule = GHC.Types.Module $trModule $trModule
+
+
+
+==================== Simplifier iteration=1 ====================
+2019-09-08 20:01:04.081589 UTC
+  ---- Simplifier counts for Simplifier iteration=1
+  Total ticks: 110
+  ---- End of simplifier counts for Simplifier iteration=1
+Result size of Simplifier iteration=1
+  = {terms: 291, types: 336, coercions: 19, joins: 4/4}
+
+-- RHS size: {terms: 49, types: 46, coercions: 0, joins: 0/0}
+$s$fShow(,)_$cshowsPrec [InlPrag=NOUSERINLINE[2]]
+  :: Int -> (Int, Bool) -> String -> [Char]
+[LclId,
+ Arity=3,
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=3,unsat_ok=True,boring_ok=False)
+         Tmpl= \ _ [Occ=Dead]
+                 (w3 [Occ=Once!] :: (Int, Bool))
+                 (w4 [Occ=Once] :: String) ->
+                 case w3 of { (ww1 [Occ=Once!], ww2 [Occ=Once!]) ->
+                 GHC.Types.:
+                   @ Char
+                   GHC.Show.$fShow(,)4
+                   (case ww1 of { GHC.Types.I# ww3 [Occ=Once] ->
+                    case GHC.Show.$wshowSignedInt
+                           0#
+                           ww3
+                           (GHC.Types.:
+                              @ Char
+                              GHC.Show.showList__1
+                              (GHC.Show.$fShow(,)_$sgo1
+                                 (GHC.Types.: @ Char GHC.Show.$fShow(,)2 w4)
+                                 (\ (eta [Occ=Once*, OS=OneShot] :: String) ->
+                                    case ww2 of {
+                                      False ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [Occ=Once, OS=OneShot] :: Char -> b -> b)
+                                             (n [Occ=Once, OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                          eta;
+                                      True ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [Occ=Once, OS=OneShot] :: Char -> b -> b)
+                                             (n [Occ=Once, OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                          eta
+                                    })
+                                 (GHC.Types.[] @ ShowS)))
+                    of
+                    { (# ww5 [Occ=Once], ww6 [Occ=Once] #) ->
+                    GHC.Types.: @ Char ww5 ww6
+                    }
+                    })
+                 }}]
+$s$fShow(,)_$cshowsPrec
+  = \ _ [Occ=Dead] (w3 :: (Int, Bool)) (w4 :: String) ->
+      case w3 of { (ww1, ww2) ->
+      GHC.Types.:
+        @ Char
+        GHC.Show.$fShow(,)4
+        (case ww1 of { GHC.Types.I# ww3 ->
+         case GHC.Show.$wshowSignedInt
+                0#
+                ww3
+                (GHC.Types.:
+                   @ Char
+                   GHC.Show.showList__1
+                   (GHC.Show.$fShow(,)_$sgo1
+                      (GHC.Types.: @ Char GHC.Show.$fShow(,)2 w4)
+                      (\ (eta :: String) ->
+                         case ww2 of {
+                           False ->
+                             GHC.Base.augment
+                               @ Char
+                               (\ (@ b)
+                                  (c [OS=OneShot] :: Char -> b -> b)
+                                  (n [OS=OneShot] :: b) ->
+                                  GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                               eta;
+                           True ->
+                             GHC.Base.augment
+                               @ Char
+                               (\ (@ b)
+                                  (c [OS=OneShot] :: Char -> b -> b)
+                                  (n [OS=OneShot] :: b) ->
+                                  GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                               eta
+                         })
+                      (GHC.Types.[] @ ShowS)))
+         of
+         { (# ww5, ww6 #) ->
+         GHC.Types.: @ Char ww5 ww6
+         }
+         })
+      }
+
+-- RHS size: {terms: 219, types: 253, coercions: 10, joins: 4/4}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=NEVER}]
+main
+  = \ (s :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             0#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s [OS=OneShot] :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             s
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      case ((GHC.IO.Handle.Text.hPutStr'
+               GHC.IO.Handle.FD.stdout
+               (GHC.Types.:
+                  @ Char
+                  GHC.Show.$fShow(,)4
+                  (case GHC.Show.$wshowSignedInt
+                          0#
+                          ipv2
+                          (GHC.Types.:
+                             @ Char
+                             GHC.Show.showList__1
+                             (GHC.Show.$fShow(,)_$sgo1
+                                (GHC.Types.: @ Char GHC.Show.$fShow(,)2 (GHC.Types.[] @ Char))
+                                (\ (eta :: String) ->
+                                   join {
+                                     $j :: [Char]
+                                     [LclId[JoinId(0)]]
+                                     $j
+                                       = case GHC.Base.augment
+                                                @ Char
+                                                (\ (@ b)
+                                                   (c [OS=OneShot] :: Char -> b -> b)
+                                                   (n [OS=OneShot] :: b) ->
+                                                   GHC.Base.foldr
+                                                     @ Char @ b c n GHC.Show.$fShowBool4)
+                                                eta
+                                         of {
+                                           False ->
+                                             GHC.Base.augment
+                                               @ Char
+                                               (\ (@ b)
+                                                  (c [OS=OneShot] :: Char -> b -> b)
+                                                  (n [OS=OneShot] :: b) ->
+                                                  GHC.Base.foldr
+                                                    @ Char @ b c n GHC.Show.$fShowBool4)
+                                               eta;
+                                           True ->
+                                             GHC.Base.augment
+                                               @ Char
+                                               (\ (@ b)
+                                                  (c [OS=OneShot] :: Char -> b -> b)
+                                                  (n [OS=OneShot] :: b) ->
+                                                  GHC.Base.foldr
+                                                    @ Char @ b c n GHC.Show.$fShowBool2)
+                                               eta
+                                         } } in
+                                   join {
+                                     $j :: [Char]
+                                     [LclId[JoinId(0)]]
+                                     $j
+                                       = case GHC.Base.augment
+                                                @ Char
+                                                (\ (@ b)
+                                                   (c [OS=OneShot] :: Char -> b -> b)
+                                                   (n [OS=OneShot] :: b) ->
+                                                   GHC.Base.foldr
+                                                     @ Char @ b c n GHC.Show.$fShowBool2)
+                                                eta
+                                         of {
+                                           False ->
+                                             GHC.Base.augment
+                                               @ Char
+                                               (\ (@ b)
+                                                  (c [OS=OneShot] :: Char -> b -> b)
+                                                  (n [OS=OneShot] :: b) ->
+                                                  GHC.Base.foldr
+                                                    @ Char @ b c n GHC.Show.$fShowBool4)
+                                               eta;
+                                           True ->
+                                             GHC.Base.augment
+                                               @ Char
+                                               (\ (@ b)
+                                                  (c [OS=OneShot] :: Char -> b -> b)
+                                                  (n [OS=OneShot] :: b) ->
+                                                  GHC.Base.foldr
+                                                    @ Char @ b c n GHC.Show.$fShowBool2)
+                                               eta
+                                         } } in
+                                   case ipv3 of {
+                                     __DEFAULT -> jump $j;
+                                     0# -> jump $j
+                                   })
+                                (GHC.Types.[] @ ShowS)))
+                   of
+                   { (# ww5, ww6 #) ->
+                   GHC.Types.: @ Char ww5 ww6
+                   }))
+               GHC.Types.True)
+            `cast` (GHC.Types.N:IO[0] <()>_R
+                    :: IO ()
+                       ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                            -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             1#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s [OS=OneShot] :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      ((GHC.IO.Handle.Text.hPutStr'
+          GHC.IO.Handle.FD.stdout
+          (GHC.Types.:
+             @ Char
+             GHC.Show.$fShow(,)4
+             (case GHC.Show.$wshowSignedInt
+                     0#
+                     ipv2
+                     (GHC.Types.:
+                        @ Char
+                        GHC.Show.showList__1
+                        (GHC.Show.$fShow(,)_$sgo1
+                           (GHC.Types.: @ Char GHC.Show.$fShow(,)2 (GHC.Types.[] @ Char))
+                           (\ (eta :: String) ->
+                              join {
+                                $j :: [Char]
+                                [LclId[JoinId(0)]]
+                                $j
+                                  = case GHC.Base.augment
+                                           @ Char
+                                           (\ (@ b)
+                                              (c [OS=OneShot] :: Char -> b -> b)
+                                              (n [OS=OneShot] :: b) ->
+                                              GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                           eta
+                                    of {
+                                      False ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [OS=OneShot] :: Char -> b -> b)
+                                             (n [OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                          eta;
+                                      True ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [OS=OneShot] :: Char -> b -> b)
+                                             (n [OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                          eta
+                                    } } in
+                              join {
+                                $j :: [Char]
+                                [LclId[JoinId(0)]]
+                                $j
+                                  = case GHC.Base.augment
+                                           @ Char
+                                           (\ (@ b)
+                                              (c [OS=OneShot] :: Char -> b -> b)
+                                              (n [OS=OneShot] :: b) ->
+                                              GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                           eta
+                                    of {
+                                      False ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [OS=OneShot] :: Char -> b -> b)
+                                             (n [OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                          eta;
+                                      True ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [OS=OneShot] :: Char -> b -> b)
+                                             (n [OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                          eta
+                                    } } in
+                              case ipv3 of {
+                                __DEFAULT -> jump $j;
+                                0# -> jump $j
+                              })
+                           (GHC.Types.[] @ ShowS)))
+              of
+              { (# ww5, ww6 #) ->
+              GHC.Types.: @ Char ww5 ww6
+              }))
+          GHC.Types.True)
+       `cast` (GHC.Types.N:IO[0] <()>_R
+               :: IO ()
+                  ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                       -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+        ipv
+      }
+      }
+      }
+      }
+      }
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 2, types: 1, coercions: 3, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 60}]
+main
+  = GHC.TopHandler.runMainIO1
+      @ ()
+      (main
+       `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+               :: (GHC.Prim.State# GHC.Prim.RealWorld
+                   -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                  ~R# IO ()))
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+:Main.main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+:Main.main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "Main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 3, types: 0, coercions: 0, joins: 0/0}
+Main.$trModule :: GHC.Types.Module
+[LclIdX,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+Main.$trModule = GHC.Types.Module $trModule $trModule
+
+
+------ Local rules for imported ids --------
+"SPEC/Main $fShow(,)_$cshowsPrec @ Int @ Bool" [2]
+    forall (w :: Show Int) (w1 :: Show Bool).
+      GHC.Show.$fShow(,)_$cshowsPrec @ Int @ Bool w w1
+      = $s$fShow(,)_$cshowsPrec
+
+
+==================== Simplifier iteration=2 ====================
+2019-09-08 20:01:04.090309 UTC
+  ---- Simplifier counts for Simplifier iteration=2
+  Total ticks: 4
+  ---- End of simplifier counts for Simplifier iteration=2
+Result size of Simplifier iteration=2
+  = {terms: 283, types: 328, coercions: 19, joins: 0/0}
+
+-- RHS size: {terms: 49, types: 46, coercions: 0, joins: 0/0}
+$s$fShow(,)_$cshowsPrec [InlPrag=NOUSERINLINE[2]]
+  :: Int -> (Int, Bool) -> String -> [Char]
+[LclId,
+ Arity=3,
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=3,unsat_ok=True,boring_ok=False)
+         Tmpl= \ _ [Occ=Dead]
+                 (w3 [Occ=Once!] :: (Int, Bool))
+                 (w4 [Occ=Once] :: String) ->
+                 case w3 of { (ww1 [Occ=Once!], ww2 [Occ=Once!]) ->
+                 GHC.Types.:
+                   @ Char
+                   GHC.Show.$fShow(,)4
+                   (case ww1 of { GHC.Types.I# ww3 [Occ=Once] ->
+                    case GHC.Show.$wshowSignedInt
+                           0#
+                           ww3
+                           (GHC.Types.:
+                              @ Char
+                              GHC.Show.showList__1
+                              (GHC.Show.$fShow(,)_$sgo1
+                                 (GHC.Types.: @ Char GHC.Show.$fShow(,)2 w4)
+                                 (\ (eta [Occ=Once*, OS=OneShot] :: String) ->
+                                    case ww2 of {
+                                      False ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [Occ=Once, OS=OneShot] :: Char -> b -> b)
+                                             (n [Occ=Once, OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                          eta;
+                                      True ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [Occ=Once, OS=OneShot] :: Char -> b -> b)
+                                             (n [Occ=Once, OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                          eta
+                                    })
+                                 (GHC.Types.[] @ ShowS)))
+                    of
+                    { (# ww5 [Occ=Once], ww6 [Occ=Once] #) ->
+                    GHC.Types.: @ Char ww5 ww6
+                    }
+                    })
+                 }}]
+$s$fShow(,)_$cshowsPrec
+  = \ _ [Occ=Dead] (w3 :: (Int, Bool)) (w4 :: String) ->
+      case w3 of { (ww1, ww2) ->
+      GHC.Types.:
+        @ Char
+        GHC.Show.$fShow(,)4
+        (case ww1 of { GHC.Types.I# ww3 ->
+         case GHC.Show.$wshowSignedInt
+                0#
+                ww3
+                (GHC.Types.:
+                   @ Char
+                   GHC.Show.showList__1
+                   (GHC.Show.$fShow(,)_$sgo1
+                      (GHC.Types.: @ Char GHC.Show.$fShow(,)2 w4)
+                      (\ (eta [OS=OneShot] :: String) ->
+                         case ww2 of {
+                           False ->
+                             GHC.Base.augment
+                               @ Char
+                               (\ (@ b)
+                                  (c [OS=OneShot] :: Char -> b -> b)
+                                  (n [OS=OneShot] :: b) ->
+                                  GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                               eta;
+                           True ->
+                             GHC.Base.augment
+                               @ Char
+                               (\ (@ b)
+                                  (c [OS=OneShot] :: Char -> b -> b)
+                                  (n [OS=OneShot] :: b) ->
+                                  GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                               eta
+                         })
+                      (GHC.Types.[] @ ShowS)))
+         of
+         { (# ww5, ww6 #) ->
+         GHC.Types.: @ Char ww5 ww6
+         }
+         })
+      }
+
+-- RHS size: {terms: 211, types: 245, coercions: 10, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=NEVER}]
+main
+  = \ (s :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             0#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s [OS=OneShot] :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             s
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      case ((GHC.IO.Handle.Text.hPutStr'
+               GHC.IO.Handle.FD.stdout
+               (GHC.Types.:
+                  @ Char
+                  GHC.Show.$fShow(,)4
+                  (case GHC.Show.$wshowSignedInt
+                          0#
+                          ipv2
+                          (GHC.Types.:
+                             @ Char
+                             GHC.Show.showList__1
+                             (GHC.Show.$fShow(,)_$sgo1
+                                (GHC.Types.: @ Char GHC.Show.$fShow(,)2 (GHC.Types.[] @ Char))
+                                (\ (eta [OS=OneShot] :: String) ->
+                                   case ipv3 of {
+                                     __DEFAULT ->
+                                       case GHC.Base.augment
+                                              @ Char
+                                              (\ (@ b)
+                                                 (c [OS=OneShot] :: Char -> b -> b)
+                                                 (n [OS=OneShot] :: b) ->
+                                                 GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                              eta
+                                       of {
+                                         False ->
+                                           GHC.Base.augment
+                                             @ Char
+                                             (\ (@ b)
+                                                (c [OS=OneShot] :: Char -> b -> b)
+                                                (n [OS=OneShot] :: b) ->
+                                                GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                             eta;
+                                         True ->
+                                           GHC.Base.augment
+                                             @ Char
+                                             (\ (@ b)
+                                                (c [OS=OneShot] :: Char -> b -> b)
+                                                (n [OS=OneShot] :: b) ->
+                                                GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                             eta
+                                       };
+                                     0# ->
+                                       case GHC.Base.augment
+                                              @ Char
+                                              (\ (@ b)
+                                                 (c [OS=OneShot] :: Char -> b -> b)
+                                                 (n [OS=OneShot] :: b) ->
+                                                 GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                              eta
+                                       of {
+                                         False ->
+                                           GHC.Base.augment
+                                             @ Char
+                                             (\ (@ b)
+                                                (c [OS=OneShot] :: Char -> b -> b)
+                                                (n [OS=OneShot] :: b) ->
+                                                GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                             eta;
+                                         True ->
+                                           GHC.Base.augment
+                                             @ Char
+                                             (\ (@ b)
+                                                (c [OS=OneShot] :: Char -> b -> b)
+                                                (n [OS=OneShot] :: b) ->
+                                                GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                             eta
+                                       }
+                                   })
+                                (GHC.Types.[] @ ShowS)))
+                   of
+                   { (# ww5, ww6 #) ->
+                   GHC.Types.: @ Char ww5 ww6
+                   }))
+               GHC.Types.True)
+            `cast` (GHC.Types.N:IO[0] <()>_R
+                    :: IO ()
+                       ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                            -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             1#
+             ((\ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                 GHC.Prim.catch#
+                   @ ()
+                   @ GHC.Exception.Type.SomeException
+                   (\ (s [OS=OneShot] :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+                      (# s, GHC.Tuple.() #))
+                   GHC.Conc.Sync.forkIO2
+                   eta1)
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1, ipv2, ipv3 #) ->
+      ((GHC.IO.Handle.Text.hPutStr'
+          GHC.IO.Handle.FD.stdout
+          (GHC.Types.:
+             @ Char
+             GHC.Show.$fShow(,)4
+             (case GHC.Show.$wshowSignedInt
+                     0#
+                     ipv2
+                     (GHC.Types.:
+                        @ Char
+                        GHC.Show.showList__1
+                        (GHC.Show.$fShow(,)_$sgo1
+                           (GHC.Types.: @ Char GHC.Show.$fShow(,)2 (GHC.Types.[] @ Char))
+                           (\ (eta [OS=OneShot] :: String) ->
+                              case ipv3 of {
+                                __DEFAULT ->
+                                  case GHC.Base.augment
+                                         @ Char
+                                         (\ (@ b)
+                                            (c [OS=OneShot] :: Char -> b -> b)
+                                            (n [OS=OneShot] :: b) ->
+                                            GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                         eta
+                                  of {
+                                    False ->
+                                      GHC.Base.augment
+                                        @ Char
+                                        (\ (@ b)
+                                           (c [OS=OneShot] :: Char -> b -> b)
+                                           (n [OS=OneShot] :: b) ->
+                                           GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                        eta;
+                                    True ->
+                                      GHC.Base.augment
+                                        @ Char
+                                        (\ (@ b)
+                                           (c [OS=OneShot] :: Char -> b -> b)
+                                           (n [OS=OneShot] :: b) ->
+                                           GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                        eta
+                                  };
+                                0# ->
+                                  case GHC.Base.augment
+                                         @ Char
+                                         (\ (@ b)
+                                            (c [OS=OneShot] :: Char -> b -> b)
+                                            (n [OS=OneShot] :: b) ->
+                                            GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                         eta
+                                  of {
+                                    False ->
+                                      GHC.Base.augment
+                                        @ Char
+                                        (\ (@ b)
+                                           (c [OS=OneShot] :: Char -> b -> b)
+                                           (n [OS=OneShot] :: b) ->
+                                           GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                        eta;
+                                    True ->
+                                      GHC.Base.augment
+                                        @ Char
+                                        (\ (@ b)
+                                           (c [OS=OneShot] :: Char -> b -> b)
+                                           (n [OS=OneShot] :: b) ->
+                                           GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                        eta
+                                  }
+                              })
+                           (GHC.Types.[] @ ShowS)))
+              of
+              { (# ww5, ww6 #) ->
+              GHC.Types.: @ Char ww5 ww6
+              }))
+          GHC.Types.True)
+       `cast` (GHC.Types.N:IO[0] <()>_R
+               :: IO ()
+                  ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                       -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+        ipv
+      }
+      }
+      }
+      }
+      }
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 2, types: 1, coercions: 3, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 60}]
+main
+  = GHC.TopHandler.runMainIO1
+      @ ()
+      (main
+       `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+               :: (GHC.Prim.State# GHC.Prim.RealWorld
+                   -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                  ~R# IO ()))
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+:Main.main :: IO ()
+[LclIdX,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)}]
+:Main.main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "Main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 3, types: 0, coercions: 0, joins: 0/0}
+Main.$trModule :: GHC.Types.Module
+[LclIdX,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+Main.$trModule = GHC.Types.Module $trModule $trModule
+
+
+------ Local rules for imported ids --------
+"SPEC/Main $fShow(,)_$cshowsPrec @ Int @ Bool" [2]
+    forall (w :: Show Int) (w1 :: Show Bool).
+      GHC.Show.$fShow(,)_$cshowsPrec @ Int @ Bool w w1
+      = $s$fShow(,)_$cshowsPrec
+
+
+==================== Simplifier iteration=1 ====================
+2019-09-08 20:01:04.113432 UTC
+  ---- Simplifier counts for Simplifier iteration=1
+  Total ticks: 10
+  ---- End of simplifier counts for Simplifier iteration=1
+Result size of Simplifier iteration=1
+  = {terms: 204, types: 249, coercions: 19, joins: 0/0}
+
+-- RHS size: {terms: 7, types: 8, coercions: 0, joins: 0/0}
+lvl :: forall b. (Char -> b -> b) -> b -> b
+[LclId,
+ Arity=2,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [0 0] 40 0}]
+lvl
+  = \ (@ b)
+      (c [Dmd=<L,C(C1(U))>, OS=OneShot] :: Char -> b -> b)
+      (n [OS=OneShot] :: b) ->
+      GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4
+
+-- RHS size: {terms: 7, types: 8, coercions: 0, joins: 0/0}
+lvl :: forall b. (Char -> b -> b) -> b -> b
+[LclId,
+ Arity=2,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [0 0] 40 0}]
+lvl
+  = \ (@ b)
+      (c [Dmd=<L,C(C1(U))>, OS=OneShot] :: Char -> b -> b)
+      (n [OS=OneShot] :: b) ->
+      GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2
+
+-- RHS size: {terms: 37, types: 30, coercions: 0, joins: 0/0}
+$s$fShow(,)_$cshowsPrec [InlPrag=NOUSERINLINE[2]]
+  :: Int -> (Int, Bool) -> String -> [Char]
+[LclId,
+ Arity=3,
+ Str=<L,A><S,1*U(1*U(U),1*U)><L,U>m2,
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=3,unsat_ok=True,boring_ok=False)
+         Tmpl= \ _ [Occ=Dead]
+                 (w3 [Occ=Once!] :: (Int, Bool))
+                 (w4 [Occ=Once] :: String) ->
+                 case w3 of { (ww1 [Occ=Once!], ww2 [Occ=Once!]) ->
+                 GHC.Types.:
+                   @ Char
+                   GHC.Show.$fShow(,)4
+                   (case ww1 of { GHC.Types.I# ww3 [Occ=Once] ->
+                    case GHC.Show.$wshowSignedInt
+                           0#
+                           ww3
+                           (GHC.Types.:
+                              @ Char
+                              GHC.Show.showList__1
+                              (GHC.Show.$fShow(,)_$sgo1
+                                 (GHC.Types.: @ Char GHC.Show.$fShow(,)2 w4)
+                                 (\ (eta [Occ=Once*, OS=OneShot] :: String) ->
+                                    case ww2 of {
+                                      False ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [Occ=Once, OS=OneShot] :: Char -> b -> b)
+                                             (n [Occ=Once, OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool4)
+                                          eta;
+                                      True ->
+                                        GHC.Base.augment
+                                          @ Char
+                                          (\ (@ b)
+                                             (c [Occ=Once, OS=OneShot] :: Char -> b -> b)
+                                             (n [Occ=Once, OS=OneShot] :: b) ->
+                                             GHC.Base.foldr @ Char @ b c n GHC.Show.$fShowBool2)
+                                          eta
+                                    })
+                                 (GHC.Types.[] @ ShowS)))
+                    of
+                    { (# ww5 [Occ=Once], ww6 [Occ=Once] #) ->
+                    GHC.Types.: @ Char ww5 ww6
+                    }
+                    })
+                 }}]
+$s$fShow(,)_$cshowsPrec
+  = \ _ [Occ=Dead, Dmd=<L,A>] (w3 :: (Int, Bool)) (w4 :: String) ->
+      case w3 of { (ww1 [Dmd=<L,U(U)>], ww2) ->
+      GHC.Types.:
+        @ Char
+        GHC.Show.$fShow(,)4
+        (case ww1 of { GHC.Types.I# ww3 ->
+         case GHC.Show.$wshowSignedInt
+                0#
+                ww3
+                (GHC.Types.:
+                   @ Char
+                   GHC.Show.showList__1
+                   (GHC.Show.$fShow(,)_$sgo1
+                      (GHC.Types.: @ Char GHC.Show.$fShow(,)2 w4)
+                      (\ (eta [OS=OneShot] :: String) ->
+                         case ww2 of {
+                           False -> GHC.Base.augment @ Char lvl eta;
+                           True -> GHC.Base.augment @ Char lvl eta
+                         })
+                      (GHC.Types.[] @ ShowS)))
+         of
+         { (# ww5, ww6 #) ->
+         GHC.Types.: @ Char ww5 ww6
+         }
+         })
+      }
+
+-- RHS size: {terms: 3, types: 2, coercions: 0, joins: 0/0}
+lvl :: [Char]
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+lvl = GHC.Types.: @ Char GHC.Show.$fShow(,)2 (GHC.Types.[] @ Char)
+
+-- RHS size: {terms: 4, types: 9, coercions: 0, joins: 0/0}
+lvl
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=True)}]
+lvl
+  = \ (s [OS=OneShot] :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+      (# s, GHC.Tuple.() #)
+
+-- RHS size: {terms: 5, types: 4, coercions: 0, joins: 0/0}
+lvl
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=1,unsat_ok=True,boring_ok=True)}]
+lvl
+  = \ (eta1 :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+      GHC.Prim.catch#
+        @ ()
+        @ GHC.Exception.Type.SomeException
+        lvl
+        GHC.Conc.Sync.forkIO2
+        eta1
+
+-- RHS size: {terms: 113, types: 115, coercions: 10, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Str=<L,U>,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [0] 524 0}]
+main
+  = \ (s :: GHC.Prim.State# GHC.Prim.RealWorld) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             0#
+             (lvl
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             s
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1 [Dmd=<L,A>], ipv2, ipv3 #) ->
+      case ((GHC.IO.Handle.Text.hPutStr'
+               GHC.IO.Handle.FD.stdout
+               (GHC.Types.:
+                  @ Char
+                  GHC.Show.$fShow(,)4
+                  (case GHC.Show.$wshowSignedInt
+                          0#
+                          ipv2
+                          (GHC.Types.:
+                             @ Char
+                             GHC.Show.showList__1
+                             (GHC.Show.$fShow(,)_$sgo1
+                                lvl
+                                (\ (eta [OS=OneShot] :: String) ->
+                                   case ipv3 of {
+                                     __DEFAULT ->
+                                       case GHC.Base.augment @ Char lvl eta of wild {
+                                         False -> GHC.Base.augment @ Char lvl eta;
+                                         True -> GHC.Types.True
+                                       };
+                                     0# ->
+                                       case GHC.Base.augment @ Char lvl eta of wild {
+                                         False -> GHC.Types.False;
+                                         True -> GHC.Base.augment @ Char lvl eta
+                                       }
+                                   })
+                                (GHC.Types.[] @ ShowS)))
+                   of
+                   { (# ww5, ww6 #) ->
+                   GHC.Types.: @ Char ww5 ww6
+                   }))
+               GHC.Types.True)
+            `cast` (GHC.Types.N:IO[0] <()>_R
+                    :: IO ()
+                       ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                            -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+             ipv
+      of
+      { (# ipv, ipv1 [Dmd=<L,A>] #) ->
+      case GHC.Prim.forkOn#
+             @ (IO ())
+             1#
+             (lvl
+              `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                      :: (GHC.Prim.State# GHC.Prim.RealWorld
+                          -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                         ~R# IO ()))
+             ipv
+      of
+      { (# ipv, ipv1 #) ->
+      case GHC.Prim.threadStatus# ipv1 ipv of
+      { (# ipv, ipv1 [Dmd=<L,A>], ipv2, ipv3 #) ->
+      ((GHC.IO.Handle.Text.hPutStr'
+          GHC.IO.Handle.FD.stdout
+          (GHC.Types.:
+             @ Char
+             GHC.Show.$fShow(,)4
+             (case GHC.Show.$wshowSignedInt
+                     0#
+                     ipv2
+                     (GHC.Types.:
+                        @ Char
+                        GHC.Show.showList__1
+                        (GHC.Show.$fShow(,)_$sgo1
+                           lvl
+                           (\ (eta [OS=OneShot] :: String) ->
+                              case ipv3 of {
+                                __DEFAULT ->
+                                  case GHC.Base.augment @ Char lvl eta of wild {
+                                    False -> GHC.Base.augment @ Char lvl eta;
+                                    True -> GHC.Types.True
+                                  };
+                                0# ->
+                                  case GHC.Base.augment @ Char lvl eta of wild {
+                                    False -> GHC.Types.False;
+                                    True -> GHC.Base.augment @ Char lvl eta
+                                  }
+                              })
+                           (GHC.Types.[] @ ShowS)))
+              of
+              { (# ww5, ww6 #) ->
+              GHC.Types.: @ Char ww5 ww6
+              }))
+          GHC.Types.True)
+       `cast` (GHC.Types.N:IO[0] <()>_R
+               :: IO ()
+                  ~R# (GHC.Prim.State# GHC.Prim.RealWorld
+                       -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))))
+        ipv
+      }
+      }
+      }
+      }
+      }
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+main :: IO ()
+[LclIdX,
+ Arity=1,
+ Str=<L,U>,
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)
+         Tmpl= main
+               `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                       :: (GHC.Prim.State# GHC.Prim.RealWorld
+                           -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                          ~R# IO ())}]
+main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 2, types: 1, coercions: 3, joins: 0/0}
+main
+  :: GHC.Prim.State# GHC.Prim.RealWorld
+     -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #)
+[LclId,
+ Arity=1,
+ Str=<L,U>,
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=False)
+         Tmpl= GHC.TopHandler.runMainIO1
+                 @ ()
+                 (main
+                  `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                          :: (GHC.Prim.State# GHC.Prim.RealWorld
+                              -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                             ~R# IO ()))}]
+main
+  = GHC.TopHandler.runMainIO1
+      @ ()
+      (main
+       `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+               :: (GHC.Prim.State# GHC.Prim.RealWorld
+                   -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                  ~R# IO ()))
+
+-- RHS size: {terms: 1, types: 0, coercions: 3, joins: 0/0}
+:Main.main :: IO ()
+[LclIdX,
+ Arity=1,
+ Str=<L,U>,
+ Unf=Unf{Src=InlineStable, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True,
+         Guidance=ALWAYS_IF(arity=0,unsat_ok=True,boring_ok=True)
+         Tmpl= main
+               `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+                       :: (GHC.Prim.State# GHC.Prim.RealWorld
+                           -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+                          ~R# IO ())}]
+:Main.main
+  = main
+    `cast` (Sym (GHC.Types.N:IO[0] <()>_R)
+            :: (GHC.Prim.State# GHC.Prim.RealWorld
+                -> (# GHC.Prim.State# GHC.Prim.RealWorld, () #))
+               ~R# IO ())
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Str=m1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 1, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Prim.Addr#
+[LclId,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 20 0}]
+$trModule = "Main"#
+
+-- RHS size: {terms: 2, types: 0, coercions: 0, joins: 0/0}
+$trModule :: GHC.Types.TrName
+[LclId,
+ Str=m1,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 20}]
+$trModule = GHC.Types.TrNameS $trModule
+
+-- RHS size: {terms: 3, types: 0, coercions: 0, joins: 0/0}
+Main.$trModule :: GHC.Types.Module
+[LclIdX,
+ Str=m,
+ Unf=Unf{Src=<vanilla>, TopLvl=True, Value=True, ConLike=True,
+         WorkFree=True, Expandable=True, Guidance=IF_ARGS [] 10 30}]
+Main.$trModule = GHC.Types.Module $trModule $trModule
+
+
+------ Local rules for imported ids --------
+"SPEC/Main $fShow(,)_$cshowsPrec @ Int @ Bool" [2]
+    forall (w :: Show Int) (w1 :: Show Bool).
+      GHC.Show.$fShow(,)_$cshowsPrec @ Int @ Bool w w1
+      = $s$fShow(,)_$cshowsPrec
+

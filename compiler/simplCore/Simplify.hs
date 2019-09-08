@@ -57,7 +57,6 @@ import ErrUtils
 import Module          ( moduleName, pprModuleName )
 import PrimOp          ( PrimOp (SeqOp) )
 
-import GHC.Magic       ( oneShot )
 
 
 {-
@@ -1841,14 +1840,14 @@ rebuildCall env info@(ArgInfo { ai_fun = fun, ai_args = rev_args
   where
     no_more_args =
       runScont cont
-        (oneShot $ \_ _         -> True)   -- Stop
-        (oneShot $ \_ _         -> True)   -- CastIt
-        (oneShot $ \_ _ _ _     -> False)  -- ApplyToVal
-        (oneShot $ \_ _ _       -> False)  -- ApplyToTy
-        (oneShot $ \_ _ _ _ _   -> True)   -- Select
-        (oneShot $ \_ _ _ _ _ _ -> True)   -- StrictBind
-        (oneShot $ \_ _ _ _     -> True)   -- StrictArg
-        (oneShot $ \_ _         -> True)   -- TickIt
+        (\_ _         -> True)   -- Stop
+        (\_ _         -> True)   -- CastIt
+        (\_ _ _ _     -> False)  -- ApplyToVal
+        (\_ _ _       -> False)  -- ApplyToTy
+        (\_ _ _ _ _   -> True)   -- Select
+        (\_ _ _ _ _ _ -> True)   -- StrictBind
+        (\_ _ _ _     -> True)   -- StrictArg
+        (\_ _         -> True)   -- TickIt
 
 
 ---------- Simplify applications and casts --------------
@@ -3036,23 +3035,19 @@ mkDupableCont :: SimplEnv -> Scont
                                        --   extra let/join-floats and in-scope variables
                         , Scont)   -- dup_cont: duplicable continuation
 
-mkDupableCont env cont
-  | contIsDupable cont
-  = return (emptyFloats env, cont)
-
 
 mkDupableCont env cont =
   runScont cont
-    (oneShot $ \_ _         -> panic "mkDupableCont"     -- Handled by previous eqn
+    (\_ _         -> return (emptyFloats env, cont)
       )  -- Stop
 
-    (oneShot $ \ty k     ->
+    (\ty k     ->
        do  { (floats, cont') <- k
            ; return (floats, mkCastIt ty cont')
            }
       )  -- CastIt
 
-    (oneShot $ \dup arg se k ->
+    (\dup arg se k ->
         -- e.g.         [...hole...] (...arg...)
         --      ==>
         --              let a = ...arg...
@@ -3075,13 +3070,13 @@ mkDupableCont env cont =
             }
       )  -- ApplyToVal
 
-    (oneShot $ \arg_ty hole_ty k ->
+    (\arg_ty hole_ty k ->
         do  { (floats, cont') <- k
             ; return (floats, mkApplyToTy arg_ty hole_ty cont')
             }
       )  -- ApplyToTy
 
-    (oneShot $ \_ case_bndr alts se k ->
+    (\_ case_bndr alts se k ->
         -- e.g.         (case [...hole...] of { pi -> ei })
         --      ===>
         --              let ji = \xij -> ei
@@ -3123,7 +3118,7 @@ mkDupableCont env cont =
             }
       )  -- Select
 
-    (oneShot $ \dup bndr bndrs body se k ->
+    (\dup bndr bndrs body se k ->
          -- See Note [Duplicating StrictBind]
          do { (_, cont) <- k
             ; let sb_env = se `setInScopeFromE` env
@@ -3155,7 +3150,7 @@ mkDupableCont env cont =
             }
       )  -- StrictBind
 
-    (oneShot $ \_ info cci k ->
+    (\_ info cci k ->
         -- See Note [Duplicating StrictArg]
         -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
          do { (floats1, cont') <- k
@@ -3170,7 +3165,7 @@ mkDupableCont env cont =
             }
       )  -- StrictArg
 
-    (oneShot $ \t k      ->
+    (\t k      ->
         -- Duplicating ticks for now, not sure if this is good or not
         do  { (floats, cont') <- k
             ; return (floats, mkTickIt t cont')

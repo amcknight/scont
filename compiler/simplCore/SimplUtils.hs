@@ -18,7 +18,7 @@ module SimplUtils (
         simplEnvForGHCi, updModeForStableUnfoldings, updModeForRules,
 
         -- The continuation type
-        SimplCont(..), DupFlag(..), StaticEnv,
+        SimplCont(..), DupFlag(..), StaticEnv, Scont(..),
         isSimplified, contIsStop,
         contIsDupable, contResultType, contHoleType,
         contIsTrivial, contArgs,
@@ -26,12 +26,16 @@ module SimplUtils (
         mkBoringStop, mkRhsStop, mkLazyArgStop, contIsRhsOrArg,
         interestingCallContext,
 
+        mkStop, mkCastIt, mkApplyToVal, mkApplyToTy, mkSelect, mkStrictBind, mkStrictArg, mkTickIt,
+
         -- ArgInfo
         ArgInfo(..), ArgSpec(..), mkArgInfo,
         addValArgTo, addCastTo, addTyArgTo,
         argInfoExpr, argInfoAppArgs, pushSimplifiedArgs,
 
         abstractFloats,
+
+        toScont, fromScont,
 
         -- Utilities
         isExitJoinId
@@ -115,14 +119,39 @@ fromScont s =
     TickIt
 
 toScont :: SimplCont -> Scont
-toScont (Stop m n)                   = Scont $ oneShot $ \f _ _ _ _ _ _ _ -> f m n
-toScont (CastIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> b m         $ runScont (toScont scont) a b c d e f g h
-toScont (ApplyToVal m n o scont)     = Scont $ oneShot $ \a b c d e f g h -> c m n o     $ runScont (toScont scont) a b c d e f g h
-toScont (ApplyToTy m n scont)        = Scont $ oneShot $ \a b c d e f g h -> d m n       $ runScont (toScont scont) a b c d e f g h
-toScont (Select m n o p scont)       = Scont $ oneShot $ \a b c d e f g h -> e m n o p   $ runScont (toScont scont) a b c d e f g h
-toScont (StrictBind m n o p q scont) = Scont $ oneShot $ \a b c d e f g h -> f m n o p q $ runScont (toScont scont) a b c d e f g h
-toScont (StrictArg m n o scont)      = Scont $ oneShot $ \a b c d e f g h -> g m n o     $ runScont (toScont scont) a b c d e f g h
-toScont (TickIt m scont)             = Scont $ oneShot $ \a b c d e f g h -> h m         $ runScont (toScont scont) a b c d e f g h
+toScont (Stop m n) = mkStop m n
+toScont (CastIt m r) = mkCastIt m $ toScont r
+toScont (ApplyToVal m n o r) = mkApplyToVal m n o $ toScont r
+toScont (ApplyToTy m n r) = mkApplyToTy m n $ toScont r
+toScont (Select m n o p r) = mkSelect m n o p $ toScont r
+toScont (StrictBind m n o p q r) = mkStrictBind m n o p q $ toScont r
+toScont (StrictArg m n o r) = mkStrictArg m n o $ toScont r
+toScont (TickIt m r) = mkTickIt m $ toScont r
+
+mkStop :: OutType -> CallCtxt -> Scont
+mkStop m n = Scont $ oneShot $ \f _ _ _ _ _ _ _ -> f m n
+
+mkCastIt :: OutCoercion -> Scont -> Scont
+mkCastIt m r = Scont $ oneShot $ \a b c d e f g h -> b m         $ runScont r a b c d e f g h
+
+mkApplyToVal :: DupFlag -> InExpr -> StaticEnv -> Scont -> Scont
+mkApplyToVal m n o r = Scont $ oneShot $ \a b c d e f g h -> c m n o     $ runScont r a b c d e f g h
+
+mkApplyToTy :: OutType -> OutType -> Scont -> Scont
+mkApplyToTy m n r = Scont $ oneShot $ \a b c d e f g h -> d m n       $ runScont r a b c d e f g h
+
+mkSelect :: DupFlag -> InId -> [InAlt] -> StaticEnv -> Scont -> Scont
+mkSelect m n o p r = Scont $ oneShot $ \a b c d e f g h -> e m n o p   $ runScont r a b c d e f g h
+
+mkStrictBind :: DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> Scont -> Scont
+mkStrictBind m n o p q r = Scont $ oneShot $ \a b c d e f g h -> f m n o p q $ runScont r a b c d e f g h
+
+mkStrictArg :: DupFlag -> ArgInfo -> CallCtxt -> Scont -> Scont
+mkStrictArg m n o r = Scont $ oneShot $ \a b c d e f g h -> g m n o     $ runScont r a b c d e f g h
+
+mkTickIt :: Tickish Id -> Scont -> Scont
+mkTickIt m r = Scont $ oneShot $ \a b c d e f g h -> h m         $ runScont r a b c d e f g h
+
 
 
 newtype Scont = Scont {runScont :: forall r.(OutType -> CallCtxt -> r) -- Stop
@@ -344,9 +373,9 @@ pushSimplifiedArgs _env []           k = k
 pushSimplifiedArgs env  (arg : args) k
   = case arg of
       TyArg { as_arg_ty = arg_ty, as_hole_ty = hole_ty }
-               -> toScont $ ApplyToTy  { sc_arg_ty = arg_ty, sc_hole_ty = hole_ty, sc_cont = fromScont rest }
-      ValArg e -> toScont $ ApplyToVal { sc_arg = e, sc_env = env, sc_dup = Simplified, sc_cont = fromScont rest }
-      CastBy c -> toScont $ CastIt c $ fromScont rest
+               -> mkApplyToTy arg_ty hole_ty rest
+      ValArg e -> mkApplyToVal Simplified e env rest
+      CastBy c -> mkCastIt c rest
   where
     rest = pushSimplifiedArgs env args k
            -- The env has an empty SubstEnv
@@ -386,13 +415,13 @@ mkFunRules rs = Just (n_required, rs)
 -}
 
 mkBoringStop :: OutType -> Scont
-mkBoringStop ty = toScont $ Stop ty BoringCtxt
+mkBoringStop ty = mkStop ty BoringCtxt
 
 mkRhsStop :: OutType -> Scont       -- See Note [RHS of lets] in CoreUnfold
-mkRhsStop ty = toScont $ Stop ty RhsCtxt
+mkRhsStop ty = mkStop ty RhsCtxt
 
 mkLazyArgStop :: OutType -> CallCtxt -> Scont
-mkLazyArgStop ty cci = toScont $ Stop ty cci
+mkLazyArgStop ty cci = mkStop ty cci
 
 -------------------
 contIsRhsOrArg :: Scont -> Bool
@@ -521,16 +550,16 @@ contArgs cont
 
     go args s =
       runScont s
-        (oneShot $ \a b         -> (False, args, toScont $ Stop a b))  -- Stop
+        (oneShot $ \a b         -> (False, args, mkStop a b))  -- Stop
         (oneShot $ \a b         -> b)  -- CastIt
-        (oneShot $ \a arg se k  -> (False, is_interesting arg se : args, toScont $ ApplyToVal a arg se $ thd k))  -- ApplyToVal
+        (oneShot $ \a arg se k  -> (False, is_interesting arg se : args, mkApplyToVal a arg se $ thd k))  -- ApplyToVal
         (oneShot $ \a b c       -> c)  -- ApplyToTy
-        (oneShot $ \a b c d e   -> (False, args, toScont $ Select a b c d $ thd e))  -- Select
-        (oneShot $ \a b c d e f -> (False, args, toScont $ StrictBind a b c d e $ thd f))  -- StrictBind
-        (oneShot $ \a b c d     -> (False, args, toScont $ StrictArg a b c $ thd d))  -- StrictArg
-        (oneShot $ \a b         -> (False, args, toScont $ TickIt a $ thd b))  -- TickIt
+        (oneShot $ \a b c d e   -> (False, args, mkSelect a b c d $ thd e))  -- Select
+        (oneShot $ \a b c d e f -> (False, args, mkStrictBind a b c d e $ thd f))  -- StrictBind
+        (oneShot $ \a b c d     -> (False, args, mkStrictArg a b c $ thd d))  -- StrictArg
+        (oneShot $ \a b         -> (False, args, mkTickIt a $ thd b))  -- TickIt
 
-    thd (a, b, c) = fromScont c
+    thd (a, b, c) = c
 
     is_interesting arg se = interestingArg se arg
                    -- Do *not* use short-cutting substitution here

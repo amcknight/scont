@@ -108,14 +108,14 @@ Key points:
 fromScont :: Scont -> SimplCont
 fromScont s =
   runScont s
-    Stop
-    CastIt
-    ApplyToVal
-    ApplyToTy
-    Select
-    StrictBind
-    StrictArg
-    TickIt
+    (Stop)
+    (const CastIt)
+    (const ApplyToVal)
+    (const ApplyToTy)
+    (const Select)
+    (const StrictBind)
+    (const StrictArg)
+    (const TickIt)
 
 toScont :: SimplCont -> Scont
 toScont (Stop m n) = mkStop m n
@@ -131,25 +131,25 @@ mkStop :: OutType -> CallCtxt -> Scont
 mkStop m n = Scont $ \f _ _ _ _ _ _ _ -> f m n
 
 mkCastIt :: OutCoercion -> Scont -> Scont
-mkCastIt m r = Scont $ \a b c d e f g h -> b m         $ runScont r a b c d e f g h
+mkCastIt m r = Scont $ \a b c d e f g h -> b r m         $ runScont r a b c d e f g h
 
 mkApplyToVal :: DupFlag -> InExpr -> StaticEnv -> Scont -> Scont
-mkApplyToVal m n o r = Scont $ \a b c d e f g h -> c m n o     $ runScont r a b c d e f g h
+mkApplyToVal m n o r = Scont $ \a b c d e f g h -> c r m n o     $ runScont r a b c d e f g h
 
 mkApplyToTy :: OutType -> OutType -> Scont -> Scont
-mkApplyToTy m n r = Scont $ \a b c d e f g h -> d m n       $ runScont r a b c d e f g h
+mkApplyToTy m n r = Scont $ \a b c d e f g h -> d r m n       $ runScont r a b c d e f g h
 
 mkSelect :: DupFlag -> InId -> [InAlt] -> StaticEnv -> Scont -> Scont
-mkSelect m n o p r = Scont $ \a b c d e f g h -> e m n o p   $ runScont r a b c d e f g h
+mkSelect m n o p r = Scont $ \a b c d e f g h -> e r m n o p   $ runScont r a b c d e f g h
 
 mkStrictBind :: DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> Scont -> Scont
-mkStrictBind m n o p q r = Scont $ \a b c d e f g h -> f m n o p q $ runScont r a b c d e f g h
+mkStrictBind m n o p q r = Scont $ \a b c d e f g h -> f r m n o p q $ runScont r a b c d e f g h
 
 mkStrictArg :: DupFlag -> ArgInfo -> CallCtxt -> Scont -> Scont
-mkStrictArg m n o r = Scont $ \a b c d e f g h -> g m n o     $ runScont r a b c d e f g h
+mkStrictArg m n o r = Scont $ \a b c d e f g h -> g r m n o     $ runScont r a b c d e f g h
 
 mkTickIt :: Tickish Id -> Scont -> Scont
-mkTickIt m r = Scont $ \a b c d e f g h -> h m         $ runScont r a b c d e f g h
+mkTickIt m r = Scont $ \a b c d e f g h -> h r m         $ runScont r a b c d e f g h
 
 
 
@@ -157,13 +157,13 @@ newtype Scont = Scont
   { runScont
     :: forall r
      . (OutType -> CallCtxt -> r)                                      -- Stop
-    -> (OutCoercion -> r -> r)                                         -- CastIt
-    -> (DupFlag -> InExpr -> StaticEnv -> r -> r)                      -- ApplyToVal
-    -> (OutType -> OutType -> r -> r)                                  -- ApplyToTy
-    -> (DupFlag -> InId -> [InAlt] -> StaticEnv -> r -> r)             -- Select
-    -> (DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> r -> r)  -- StrictBind
-    -> (DupFlag -> ArgInfo -> CallCtxt -> r -> r)                      -- StrictArg
-    -> (Tickish Id -> r -> r)                                          -- TickIt
+    -> (Scont -> OutCoercion -> r -> r)                                         -- CastIt
+    -> (Scont -> DupFlag -> InExpr -> StaticEnv -> r -> r)                      -- ApplyToVal
+    -> (Scont -> OutType -> OutType -> r -> r)                                  -- ApplyToTy
+    -> (Scont -> DupFlag -> InId -> [InAlt] -> StaticEnv -> r -> r)             -- Select
+    -> (Scont -> DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> r -> r)  -- StrictBind
+    -> (Scont -> DupFlag -> ArgInfo -> CallCtxt -> r -> r)                      -- StrictArg
+    -> (Scont -> Tickish Id -> r -> r)                                          -- TickIt
     -> r
   }
 
@@ -434,88 +434,88 @@ contIsRhsOrArg :: Scont -> Bool
 contIsRhsOrArg s =
   runScont s
     (\_ _         -> True)    -- Stop
-    (\_ _         -> False)   -- CastIt
-    (\_ _ _ _     -> False)   -- ApplyToVal
-    (\_ _ _       -> False)   -- ApplyToTy
-    (\_ _ _ _ _   -> False)   -- Select
-    (\_ _ _ _ _ _ -> True)    -- StrictBind
-    (\_ _ _ _     -> True)    -- StrictArg
-    (\_ _         -> False)   -- TickIt
+    (\_ _ _         -> False)   -- CastIt
+    (\_ _ _ _ _     -> False)   -- ApplyToVal
+    (\_ _ _ _       -> False)   -- ApplyToTy
+    (\_ _ _ _ _ _   -> False)   -- Select
+    (\_ _ _ _ _ _ _ -> True)    -- StrictBind
+    (\_ _ _ _ _     -> True)    -- StrictArg
+    (\_ _ _         -> False)   -- TickIt
 
 contIsRhs :: Scont -> Bool
 contIsRhs s =
   runScont s
     (\_ a         -> case a of {RhsCtxt -> True; _ -> False})  -- Stop
-    (\_ _         -> False)                                    -- CastIt
-    (\_ _ _ _     -> False)                                    -- ApplyToVal
-    (\_ _ _       -> False)                                    -- ApplyToTy
-    (\_ _ _ _ _   -> False)                                    -- Select
-    (\_ _ _ _ _ _ -> False)                                    -- StrictBind
-    (\_ _ _ _     -> False)                                    -- StrictArg
-    (\_ _         -> False)                                    -- TickIt
+    (\_ _ _         -> False)                                    -- CastIt
+    (\_ _ _ _ _     -> False)                                    -- ApplyToVal
+    (\_ _ _ _       -> False)                                    -- ApplyToTy
+    (\_ _ _ _ _ _   -> False)                                    -- Select
+    (\_ _ _ _ _ _ _ -> False)                                    -- StrictBind
+    (\_ _ _ _ _     -> False)                                    -- StrictArg
+    (\_ _ _         -> False)                                    -- TickIt
 
 -------------------
 contIsStop :: Scont -> Bool
 contIsStop s =
   runScont s
     (\_ _         -> True)   -- Stop
-    (\_ _         -> False)  -- CastIt
-    (\_ _ _ _     -> False)  -- ApplyToVal
-    (\_ _ _       -> False)  -- ApplyToTy
-    (\_ _ _ _ _   -> False)  -- Select
-    (\_ _ _ _ _ _ -> False)  -- StrictBind
-    (\_ _ _ _     -> False)  -- StrictArg
-    (\_ _         -> False)  -- TickIt
+    (\_ _ _         -> False)  -- CastIt
+    (\_ _ _ _ _     -> False)  -- ApplyToVal
+    (\_ _ _ _       -> False)  -- ApplyToTy
+    (\_ _ _ _ _ _   -> False)  -- Select
+    (\_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (\_ _ _ _ _     -> False)  -- StrictArg
+    (\_ _ _         -> False)  -- TickIt
 
 contIsDupable :: Scont -> Bool
 contIsDupable s =
   runScont s
     (\_ _         -> True)   -- Stop
-    (\_ k         -> k)      -- CastIt
-    (\a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- ApplyToVal -- See Note [DupFlag invariants]
-    (\_ _ k       -> k)      -- ApplyToTy
-    (\a _ _ _ _   -> case a of {OkToDup -> True; _ -> False})  -- Select -- See Note [DupFlag invariants]
-    (\_ _ _ _ _ _ -> False)  -- StrictBind
-    (\a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- StrictArg -- See Note [DupFlag invariants]
-    (\_ _         -> False)  -- TickIt
+    (\_ _ k         -> k)      -- CastIt
+    (\_ a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- ApplyToVal -- See Note [DupFlag invariants]
+    (\_ _ _ k       -> k)      -- ApplyToTy
+    (\_ a _ _ _ _   -> case a of {OkToDup -> True; _ -> False})  -- Select -- See Note [DupFlag invariants]
+    (\_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (\_ a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- StrictArg -- See Note [DupFlag invariants]
+    (\_ _ _         -> False)  -- TickIt
 
 -------------------
 contIsTrivial :: Scont -> Bool
 contIsTrivial s =
   runScont s
     (\_ _         -> True)   -- Stop
-    (\_ k         -> k)  -- CastIt
-    (\_ a _ k     -> case (a, k) of {(Coercion _, k) -> k; _ -> False})  -- ApplyToVal
-    (\_ _ k       -> k)  -- ApplyToTy
-    (\_ _ _ _ _   -> False)  -- Select
-    (\_ _ _ _ _ _ -> False)  -- StrictBind
-    (\_ _ _ _     -> False)  -- StrictArg
-    (\_ _         -> False)  -- TickIt
+    (\_ _ k         -> k)  -- CastIt
+    (\_ _ a _ k     -> case (a, k) of {(Coercion _, k) -> k; _ -> False})  -- ApplyToVal
+    (\_ _ _ k       -> k)  -- ApplyToTy
+    (\_ _ _ _ _ _   -> False)  -- Select
+    (\_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (\_ _ _ _ _     -> False)  -- StrictArg
+    (\_ _ _         -> False)  -- TickIt
 
 -------------------
 contResultType :: Scont -> OutType
 contResultType s =
   runScont s
     (\t _         -> t)  -- Stop
-    (\_ k         -> k)  -- CastIt
-    (\_ _ _ k     -> k)  -- ApplyToVal
-    (\_ _ k       -> k)  -- ApplyToTy
-    (\_ _ _ _ k   -> k)  -- Select
-    (\_ _ _ _ _ k -> k)  -- StrictBind
-    (\_ _ _ k     -> k)  -- StrictArg
-    (\_ k         -> k)  -- TickIt
+    (\_ _ k         -> k)  -- CastIt
+    (\_ _ _ _ k     -> k)  -- ApplyToVal
+    (\_ _ _ k       -> k)  -- ApplyToTy
+    (\_ _ _ _ _ k   -> k)  -- Select
+    (\_ _ _ _ _ _ k -> k)  -- StrictBind
+    (\_ _ _ _ k     -> k)  -- StrictArg
+    (\_ _ k         -> k)  -- TickIt
 
 contHoleType :: Scont -> OutType
 contHoleType s =
   runScont s
     (\t _         -> t)   -- Stop
-    (\c _         -> pFst (coercionKind c))  -- CastIt
-    (\d a e k     -> mkVisFunTy (perhapsSubstTy d e (exprType a)) k)  -- ApplyToVal
-    (\_ t _       -> t)  -- ApplyToTy   -- See Note [The hole type in ApplyToTy]
-    (\d b _ e _   -> perhapsSubstTy d e (idType b))  -- Select
-    (\d b _ _ e _ -> perhapsSubstTy d e (idType b))  -- StrictBind
-    (\_ a _ _     -> funArgTy (ai_type a))  -- StrictArg
-    (\_ k         -> k)  -- TickIt
+    (\_ c _         -> pFst (coercionKind c))  -- CastIt
+    (\_ d a e k     -> mkVisFunTy (perhapsSubstTy d e (exprType a)) k)  -- ApplyToVal
+    (\_ _ t _       -> t)  -- ApplyToTy   -- See Note [The hole type in ApplyToTy]
+    (\_ d b _ e _   -> perhapsSubstTy d e (idType b))  -- Select
+    (\_ d b _ _ e _ -> perhapsSubstTy d e (idType b))  -- StrictBind
+    (\_ _ a _ _     -> funArgTy (ai_type a))  -- StrictArg
+    (\_ _ k         -> k)  -- TickIt
 
 
 -------------------
@@ -524,13 +524,13 @@ countArgs :: Scont -> Int
 countArgs s =
   runScont s
     (\_ _         -> 0)  -- Stop
-    (\_ _         -> 0)  -- CastIt
-    (\_ _ _ args  -> 1 + args)  -- ApplyToVal
-    (\_ _ args    -> 1 + args)  -- ApplyToTy
-    (\_ _ _ _ _   -> 0)  -- Select
-    (\_ _ _ _ _ _ -> 0)  -- StrictBind
-    (\_ _ _ _     -> 0)  -- StrictArg
-    (\_ _         -> 0)  -- TickIt
+    (\_ _ _         -> 0)  -- CastIt
+    (\_ _ _ _ args  -> 1 + args)  -- ApplyToVal
+    (\_ _ _ args    -> 1 + args)  -- ApplyToTy
+    (\_ _ _ _ _ _   -> 0)  -- Select
+    (\_ _ _ _ _ _ _ -> 0)  -- StrictBind
+    (\_ _ _ _ _     -> 0)  -- StrictArg
+    (\_ _ _         -> 0)  -- TickIt
 
 -- TODO(sandy): get rid of the toSconts
 contArgs :: Scont -> (Bool, [ArgSummary], Scont)
@@ -546,28 +546,28 @@ contArgs cont
     lone s =
       runScont s
         (\_ _         -> True)   -- Stop
-        (\_ _         -> False)  -- CastIt
-        (\_ _ _ _     -> False)  -- ApplyToVal
-        (\_ _ _       -> False)  -- ApplyToTy  -- See Note [Lone variables] in CoreUnfold
-        (\_ _ _ _ _   -> True)   -- Select
-        (\_ _ _ _ _ _ -> True)   -- StrictBind
-        (\_ _ _ _     -> True)   -- StrictArg
-        (\_ _         -> True)   -- TickIt
+        (\_ _ _         -> False)  -- CastIt
+        (\_ _ _ _ _     -> False)  -- ApplyToVal
+        (\_ _ _ _       -> False)  -- ApplyToTy  -- See Note [Lone variables] in CoreUnfold
+        (\_ _ _ _ _ _   -> True)   -- Select
+        (\_ _ _ _ _ _ _ -> True)   -- StrictBind
+        (\_ _ _ _ _     -> True)   -- StrictArg
+        (\_ _ _         -> True)   -- TickIt
 
     go s =
       runScont s
         (\a b         -> [])  -- Stop
-        (\a b         -> b)  -- CastIt
-        (\a arg se k  ->
+        (\_ a b         -> b)  -- CastIt
+        (\_ a arg se k  ->
           let (y) = k
            in is_interesting arg se : y
           )
           -- ApplyToVal
-        (\a b c       -> c)  -- ApplyToTy
-        (\a b c d e   -> [])  -- Select
-        (\a b c d e f -> [])  -- StrictBind
-        (\a b c d     -> [])  -- StrictArg
-        (\a b         -> [])  -- TickIt
+        (\_ a b c       -> c)  -- ApplyToTy
+        (\_ a b c d e   -> [])  -- Select
+        (\_ a b c d e f -> [])  -- StrictBind
+        (\_ a b c d     -> [])  -- StrictArg
+        (\_ a b         -> [])  -- TickIt
 
     is_interesting arg se = interestingArg se arg
                    -- Do *not* use short-cutting substitution here
@@ -751,7 +751,7 @@ interestingCallContext env cont
   where
     interesting s = runScont s
       (\_ cci         -> cci)   -- Stop
-      (\_ k         -> k)  -- CastIt
+      (\_ _ k         -> k)  -- CastIt
         -- If this call is the arg of a strict function, the context
         -- is a bit interesting.  If we inline here, we may get useful
         -- evaluation information to avoid repeated evals: e.g.
@@ -766,17 +766,17 @@ interestingCallContext env cont
         -- Here, the context of (f x) is strict, and if f's unfolding is
         -- a build it's *great* to inline it here.  So we must ensure that
         -- the context for (f x) is not totally uninteresting.
-      (\_ _ _ _     -> ValAppCtxt)  -- ApplyToVal
+      (\_ _ _ _ _     -> ValAppCtxt)  -- ApplyToVal
         -- Can happen if we have (f Int |> co) y
         -- If f has an INLINE prag we need to give it some
         -- motivation to inline. See Note [Cast then apply]
         -- in CoreUnfold
-      (\_ _ k       -> k)  -- ApplyToTy
-      (\_ _ _ _ _   -> if sm_case_case (getMode env) then CaseCtxt else BoringCtxt)  -- Select
+      (\_ _ _ k       -> k)  -- ApplyToTy
+      (\_ _ _ _ _ _   -> if sm_case_case (getMode env) then CaseCtxt else BoringCtxt)  -- Select
        -- See Note [No case of case is boring]
-      (\_ _ _ _ _ _ -> BoringCtxt)  -- StrictBind
-      (\_ _ cci _   -> cci)  -- StrictArg
-      (\_ k         -> k)  -- TickIt
+      (\_ _ _ _ _ _ _ -> BoringCtxt)  -- StrictBind
+      (\_ _ _ cci _   -> cci)  -- StrictArg
+      (\_ _ k         -> k)  -- TickIt
 
 interestingArgContext :: [CoreRule] -> Scont -> Bool
 -- If the argument has form (f x y), where x,y are boring,
@@ -807,13 +807,13 @@ interestingArgContext rules call_cont
     go s =
       runScont s
         (\_ cci       -> interesting cci)  -- Stop
-        (\_ c         -> c)                -- CastIt
-        (\_ _ _ _     -> False)            -- ApplyToVal  -- Shouldn't really happen
-        (\_ _ _       -> False)            -- ApplyToTy   -- Ditto
-        (\_ _ _ _ _   -> False)            -- Select
-        (\_ _ _ _ _ _ -> False)            -- StrictBind  -- ?
-        (\_ _ cci _   -> interesting cci)  -- StrictArg
-        (\_ c         -> c)                -- TickIt
+        (\_ _ c         -> c)                -- CastIt
+        (\_ _ _ _ _     -> False)            -- ApplyToVal  -- Shouldn't really happen
+        (\_ _ _ _       -> False)            -- ApplyToTy   -- Ditto
+        (\_ _ _ _ _ _   -> False)            -- Select
+        (\_ _ _ _ _ _ _ -> False)            -- StrictBind  -- ?
+        (\_ _ _ cci _   -> interesting cci)  -- StrictArg
+        (\_ _ c         -> c)                -- TickIt
 
     interesting RuleArgCtxt = True
     interesting _           = False

@@ -6,6 +6,7 @@
 
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns #-}
+{-# LANGUAGE TupleSections #-}
 
 module Simplify ( simplTopBinds, simplExpr, simplRules ) where
 
@@ -1841,13 +1842,13 @@ rebuildCall env info@(ArgInfo { ai_fun = fun, ai_args = rev_args
     no_more_args =
       runScont cont
         (\_ _         -> True)   -- Stop
-        (\_ _         -> True)   -- CastIt
-        (\_ _ _ _     -> False)  -- ApplyToVal
-        (\_ _ _       -> False)  -- ApplyToTy
-        (\_ _ _ _ _   -> True)   -- Select
-        (\_ _ _ _ _ _ -> True)   -- StrictBind
-        (\_ _ _ _     -> True)   -- StrictArg
-        (\_ _         -> True)   -- TickIt
+        (\_ _ _         -> True)   -- CastIt
+        (\_ _ _ _ _     -> False)  -- ApplyToVal
+        (\_ _ _ _       -> False)  -- ApplyToTy
+        (\_ _ _ _ _ _   -> True)   -- Select
+        (\_ _ _ _ _ _ _ -> True)   -- StrictBind
+        (\_ _ _ _ _     -> True)   -- StrictArg
+        (\_ _ _         -> True)   -- TickIt
 
 
 ---------- Simplify applications and casts --------------

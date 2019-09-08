@@ -3045,10 +3045,74 @@ mkDupableCont env (fromScont -> CastIt ty cont)
   = do  { (floats, cont') <- mkDupableCont env $ toScont cont
         ; return (floats, toScont $ CastIt ty $ fromScont cont') }
 
--- Duplicating ticks for now, not sure if this is good or not
-mkDupableCont env (fromScont -> TickIt t cont)
+mkDupableCont env (fromScont -> ApplyToVal { sc_arg = arg, sc_dup = dup
+                              , sc_env = se, sc_cont = cont })
+  =     -- e.g.         [...hole...] (...arg...)
+        --      ==>
+        --              let a = ...arg...
+        --              in [...hole...] a
+        -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
+    do  { (floats1, cont') <- mkDupableCont env $ toScont cont
+        ; let env' = env `setInScopeFromF` floats1
+        ; (_, se', arg') <- simplArg env' dup se arg
+        ; (let_floats2, arg'') <- makeTrivial (getMode env) NotTopLevel (fsLit "karg") arg'
+        ; let all_floats = floats1 `addLetFloats` let_floats2
+        ; return ( all_floats
+                 , toScont $ ApplyToVal { sc_arg = arg''
+                              , sc_env = se' `setInScopeFromF` all_floats
+                                         -- Ensure that sc_env includes the free vars of
+                                         -- arg'' in its in-scope set, even if makeTrivial
+                                         -- has turned arg'' into a fresh variable
+                                         -- See Note [StaticEnv invariant] in SimplUtils
+                              , sc_dup = OkToDup, sc_cont = fromScont $ cont' }) }
+
+
+mkDupableCont env (fromScont -> ApplyToTy { sc_cont = cont
+                             , sc_arg_ty = arg_ty, sc_hole_ty = hole_ty })
   = do  { (floats, cont') <- mkDupableCont env $ toScont cont
-        ; return (floats, toScont $ TickIt t $ fromScont cont') }
+        ; return (floats, toScont $ ApplyToTy { sc_cont = fromScont cont'
+                                    , sc_arg_ty = arg_ty, sc_hole_ty = hole_ty }) }
+
+mkDupableCont env (fromScont -> Select { sc_bndr = case_bndr, sc_alts = alts
+                          , sc_env = se, sc_cont = cont })
+  =     -- e.g.         (case [...hole...] of { pi -> ei })
+        --      ===>
+        --              let ji = \xij -> ei
+        --              in case [...hole...] of { pi -> ji xij }
+        -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
+    do  { tick (CaseOfCase case_bndr)
+        ; (floats, alt_cont) <- mkDupableCaseCont env alts $ toScont cont
+                -- NB: We call mkDupableCaseCont here to make cont duplicable
+                --     (if necessary, depending on the number of alts)
+                -- And this is important: see Note [Fusing case continuations]
+
+        ; let alt_env = se `setInScopeFromF` floats
+        ; (alt_env', case_bndr') <- simplBinder alt_env case_bndr
+        ; alts' <- mapM (simplAlt alt_env' Nothing [] case_bndr' alt_cont) alts
+        -- Safe to say that there are no handled-cons for the DEFAULT case
+                -- NB: simplBinder does not zap deadness occ-info, so
+                -- a dead case_bndr' will still advertise its deadness
+                -- This is really important because in
+                --      case e of b { (# p,q #) -> ... }
+                -- b is always dead, and indeed we are not allowed to bind b to (# p,q #),
+                -- which might happen if e was an explicit unboxed pair and b wasn't marked dead.
+                -- In the new alts we build, we have the new case binder, so it must retain
+                -- its deadness.
+        -- NB: we don't use alt_env further; it has the substEnv for
+        --     the alternatives, and we don't want that
+
+        ; (join_floats, alts'') <- mapAccumLM (mkDupableAlt (seDynFlags env) case_bndr')
+                                              emptyJoinFloats alts'
+
+        ; let all_floats = floats `addJoinFloats` join_floats
+                           -- Note [Duplicated env]
+        ; return (all_floats
+                 , toScont $ Select { sc_dup  = OkToDup
+                          , sc_bndr = case_bndr'
+                          , sc_alts = alts''
+                          , sc_env  = zapSubstEnv se `setInScopeFromF` all_floats
+                                      -- See Note [StaticEnv invariant] in SimplUtils
+                          , sc_cont = fromScont $ mkBoringStop (contResultType $ toScont cont) } ) }
 
 mkDupableCont env (fromScont -> StrictBind { sc_bndr = bndr, sc_bndrs = bndrs
                               , sc_body = body, sc_env = se, sc_cont = cont})
@@ -3091,73 +3155,10 @@ mkDupableCont env (fromScont -> StrictArg { sc_fun = info, sc_cci = cci, sc_cont
                             , sc_cont = fromScont cont'
                             , sc_dup = OkToDup} ) }
 
-mkDupableCont env (fromScont -> ApplyToTy { sc_cont = cont
-                             , sc_arg_ty = arg_ty, sc_hole_ty = hole_ty })
+-- Duplicating ticks for now, not sure if this is good or not
+mkDupableCont env (fromScont -> TickIt t cont)
   = do  { (floats, cont') <- mkDupableCont env $ toScont cont
-        ; return (floats, toScont $ ApplyToTy { sc_cont = fromScont cont'
-                                    , sc_arg_ty = arg_ty, sc_hole_ty = hole_ty }) }
-
-mkDupableCont env (fromScont -> ApplyToVal { sc_arg = arg, sc_dup = dup
-                              , sc_env = se, sc_cont = cont })
-  =     -- e.g.         [...hole...] (...arg...)
-        --      ==>
-        --              let a = ...arg...
-        --              in [...hole...] a
-        -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
-    do  { (floats1, cont') <- mkDupableCont env $ toScont cont
-        ; let env' = env `setInScopeFromF` floats1
-        ; (_, se', arg') <- simplArg env' dup se arg
-        ; (let_floats2, arg'') <- makeTrivial (getMode env) NotTopLevel (fsLit "karg") arg'
-        ; let all_floats = floats1 `addLetFloats` let_floats2
-        ; return ( all_floats
-                 , toScont $ ApplyToVal { sc_arg = arg''
-                              , sc_env = se' `setInScopeFromF` all_floats
-                                         -- Ensure that sc_env includes the free vars of
-                                         -- arg'' in its in-scope set, even if makeTrivial
-                                         -- has turned arg'' into a fresh variable
-                                         -- See Note [StaticEnv invariant] in SimplUtils
-                              , sc_dup = OkToDup, sc_cont = fromScont $ cont' }) }
-
-mkDupableCont env (fromScont -> Select { sc_bndr = case_bndr, sc_alts = alts
-                          , sc_env = se, sc_cont = cont })
-  =     -- e.g.         (case [...hole...] of { pi -> ei })
-        --      ===>
-        --              let ji = \xij -> ei
-        --              in case [...hole...] of { pi -> ji xij }
-        -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
-    do  { tick (CaseOfCase case_bndr)
-        ; (floats, alt_cont) <- mkDupableCaseCont env alts $ toScont cont
-                -- NB: We call mkDupableCaseCont here to make cont duplicable
-                --     (if necessary, depending on the number of alts)
-                -- And this is important: see Note [Fusing case continuations]
-
-        ; let alt_env = se `setInScopeFromF` floats
-        ; (alt_env', case_bndr') <- simplBinder alt_env case_bndr
-        ; alts' <- mapM (simplAlt alt_env' Nothing [] case_bndr' alt_cont) alts
-        -- Safe to say that there are no handled-cons for the DEFAULT case
-                -- NB: simplBinder does not zap deadness occ-info, so
-                -- a dead case_bndr' will still advertise its deadness
-                -- This is really important because in
-                --      case e of b { (# p,q #) -> ... }
-                -- b is always dead, and indeed we are not allowed to bind b to (# p,q #),
-                -- which might happen if e was an explicit unboxed pair and b wasn't marked dead.
-                -- In the new alts we build, we have the new case binder, so it must retain
-                -- its deadness.
-        -- NB: we don't use alt_env further; it has the substEnv for
-        --     the alternatives, and we don't want that
-
-        ; (join_floats, alts'') <- mapAccumLM (mkDupableAlt (seDynFlags env) case_bndr')
-                                              emptyJoinFloats alts'
-
-        ; let all_floats = floats `addJoinFloats` join_floats
-                           -- Note [Duplicated env]
-        ; return (all_floats
-                 , toScont $ Select { sc_dup  = OkToDup
-                          , sc_bndr = case_bndr'
-                          , sc_alts = alts''
-                          , sc_env  = zapSubstEnv se `setInScopeFromF` all_floats
-                                      -- See Note [StaticEnv invariant] in SimplUtils
-                          , sc_cont = fromScont $ mkBoringStop (contResultType $ toScont cont) } ) }
+        ; return (floats, toScont $ TickIt t $ fromScont cont') }
 
 mkDupableAlt :: DynFlags -> OutId
              -> JoinFloats -> OutAlt

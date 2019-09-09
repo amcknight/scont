@@ -1632,18 +1632,18 @@ trimJoinCont :: Id -> Maybe JoinArity -> Scont -> Scont
 trimJoinCont _ Nothing cont
   = cont -- Not a jump
 trimJoinCont var (Just arity) cont
-  = toScont $ trim arity $ fromScont cont
+  = toScont $ trim (fromScont cont) arity
   where
-    trim :: Int -> SimplCont -> SimplCont
-    trim 0 cont@(Stop {})
+    trim :: SimplCont -> Int -> SimplCont
+    trim cont@(Stop {}) 0
       = cont
-    trim 0 cont
+    trim cont 0
       = fromScont $ mkBoringStop (contResultType $ toScont cont)
-    trim n cont@(ApplyToVal { sc_cont = k })
-      = cont { sc_cont = trim (n-1) k }
-    trim n cont@(ApplyToTy { sc_cont = k })
-      = cont { sc_cont = trim (n-1) k } -- join arity counts types!
-    trim _ cont
+    trim cont@(ApplyToVal { sc_cont = k }) n
+      = cont { sc_cont = trim k (n-1) }
+    trim cont@(ApplyToTy { sc_cont = k }) n
+      = cont { sc_cont = trim k (n-1) } -- join arity counts types!
+    trim cont _
       = pprPanic "completeCall" $ ppr var $$ ppr cont
 
 

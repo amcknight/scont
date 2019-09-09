@@ -1213,33 +1213,39 @@ simplTick env tickish expr cont
 rebuild :: SimplEnv -> OutExpr -> Scont -> SimplM (SimplFloats, OutExpr)
 -- At this point the substitution in the SimplEnv should be irrelevant;
 -- only the in-scope set matters
-rebuild env expr cont
-  = case fromScont cont of
-      Stop {}          -> return (emptyFloats env, expr)
-      TickIt t cont    -> rebuild env (mkTick t expr) $ toScont cont
-      CastIt co cont   -> rebuild env (mkCast expr co) $ toScont cont
-                       -- NB: mkCast implements the (Coercion co |> g) optimisation
+rebuild env expr cont = go cont expr
+  where
+    go :: Scont -> OutExpr -> SimplM (SimplFloats, OutExpr)
+    go cont = runScont cont
+      (\_ _ expr -> return (emptyFloats env, expr))
 
-      Select { sc_bndr = bndr, sc_alts = alts, sc_env = se, sc_cont = cont }
-        -> rebuildCase (se `setInScopeFromE` env) expr bndr alts $ toScont cont
+      (\jg co k expr -> k (mkCast expr co))
+                        -- NB: mkCast implements the (Coercion co |> g) optimisation
 
-      StrictArg { sc_fun = fun, sc_cont = cont }
-        -> rebuildCall env (fun `addValArgTo` expr) $ toScont cont
-      StrictBind { sc_bndr = b, sc_bndrs = bs, sc_body = body
-                 , sc_env = se, sc_cont = cont }
-        -> do { (floats1, env') <- simplNonRecX (se `setInScopeFromE` env) b expr
-                                  -- expr satisfies let/app since it started life
-                                  -- in a call to simplNonRecE
-              ; (floats2, expr') <- simplLam env' bs body $ toScont cont
-              ; return (floats1 `addFloats` floats2, expr') }
-
-      ApplyToTy  { sc_arg_ty = ty, sc_cont = cont}
-        -> rebuild env (App expr (Type ty)) $ toScont cont
-
-      ApplyToVal { sc_arg = arg, sc_env = se, sc_dup = dup_flag, sc_cont = cont}
+      (\_ dup_flag arg se k expr ->
         -- See Note [Avoid redundant simplification]
-        -> do { (_, _, arg') <- simplArg env dup_flag se arg
-              ; rebuild env (App expr arg') $ toScont cont }
+        do { (_, _, arg') <- simplArg env dup_flag se arg
+           ; k $ App expr arg'}
+        )
+
+      (\_ ty _ k expr -> k $ App expr $ Type ty)
+
+      (\cont dup bndr alts se _ expr ->
+        rebuildCase (se `setInScopeFromE` env) expr bndr alts cont
+      )
+
+      (\cont dup b bs body se _ expr ->
+         do { (floats1, env') <- simplNonRecX (se `setInScopeFromE` env) b expr
+                                -- expr satisfies let/app since it started life
+                                -- in a call to simplNonRecE
+            ; (floats2, expr') <- simplLam env' bs body cont
+            ; return (floats1 `addFloats` floats2, expr') }
+
+      )
+
+      (\cont dup fun cci _ expr -> rebuildCall env (fun `addValArgTo` expr) cont)
+
+      (\_ t k expr -> k $ mkTick t expr)
 
 {-
 ************************************************************************

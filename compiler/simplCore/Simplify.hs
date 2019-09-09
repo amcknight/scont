@@ -1160,11 +1160,32 @@ simplTick env tickish expr cont
 
   -- Push type application and coercion inside a tick
   splitCont :: Scont -> (Scont, Scont)
-  splitCont cont@(fromScont -> ApplyToTy { sc_cont = tail }) = (toScont $ (fromScont cont) { sc_cont = fromScont inc }, outc)
-    where (inc,outc) = splitCont $ toScont tail
-  splitCont (fromScont -> CastIt co c) = (mkCastIt co inc, outc)
-    where (inc,outc) = splitCont $ toScont c
-  splitCont other = (mkBoringStop (contHoleType other), other)
+  splitCont scont =
+    runScont scont
+      (\o c ->
+        let mk = mkStop o c
+        in (mkBoringStop (contHoleType mk), mk))   -- Stop
+      (\cont co k ->
+        let (inc, outc) = k
+        in (mkCastIt co inc, outc))   -- CastIt
+      (\cont dup ie se _ ->
+        let mk = mkApplyToVal dup ie se cont
+        in (mkBoringStop (contHoleType mk), mk))   -- ApplyToVal
+      (\_ arg hole k  ->
+        let (inc, outc) = k
+        in (mkApplyToTy arg hole inc, outc))   -- ApplyToTy
+      (\cont dup ia ie se _  ->
+        let mk = mkSelect dup ia ie se cont
+        in (mkBoringStop (contHoleType mk), mk))   -- Select
+      (\cont dup ii ib ie se _ ->
+        let mk = mkStrictBind dup ii ib ie se cont
+        in (mkBoringStop (contHoleType mk), mk))   -- StrictBind
+      (\cont dup info c _ ->
+        let mk = mkStrictArg dup info c cont
+        in (mkBoringStop (contHoleType mk), mk))   -- StrictArg
+      (\cont t _ ->
+        let mk = mkTickIt t cont
+        in (mkBoringStop (contHoleType mk), mk))   -- TickIt
 
   getDoneId (DoneId id)  = id
   getDoneId (DoneEx e _) = getIdFromTrivialExpr e -- Note [substTickish] in CoreSubst

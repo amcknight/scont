@@ -1291,56 +1291,71 @@ simplCast env body co0 cont0
         ; cont1 <- {-#SCC "simplCast-addCoerce" #-}
                    if isReflCo co1
                    then return cont0  -- See Note [Optimising reflexivity]
-                   else addCoerce co1 cont0
+                   else addCoerce cont0 co1
         ; {-#SCC "simplCast-simplExprF" #-} simplExprF env body cont1 }
   where
         -- If the first parameter is MRefl, then simplifying revealed a
         -- reflexive coercion. Omit.
         addCoerceM :: MOutCoercion -> Scont -> SimplM Scont
         addCoerceM MRefl   cont = return cont
-        addCoerceM (MCo co) cont = addCoerce co cont
+        addCoerceM (MCo co) cont = addCoerce cont co
 
-        addCoerce :: OutCoercion -> Scont -> SimplM Scont
-        addCoerce co1 (fromScont -> CastIt co2 cont)  -- See Note [Optimising reflexivity]
-          | isReflexiveCo co' = return $ toScont cont
-          | otherwise         = addCoerce co' $ toScont cont
-          where
-            co' = mkTransCo co1 co2
+        addCoerce :: Scont -> OutCoercion -> SimplM Scont
+        addCoerce (fromScont -> CastIt co2 cont) co1 =
+          let co' = mkTransCo co1 co2
+           in case isReflexiveCo co' of
+                True -> return $ toScont cont
+                False -> addCoerce (toScont cont) co'
 
-        addCoerce co cont@(fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = tail })
-          | Just (arg_ty', m_co') <- pushCoTyArg co arg_ty
-          = {-#SCC "addCoerce-pushCoTyArg" #-}
-            do { tail' <- addCoerceM m_co' $ toScont tail
-               ; return (toScont $ (fromScont cont) { sc_arg_ty = arg_ty', sc_cont = fromScont $ tail' }) }
+        addCoerce cont@(fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = tail }) co =
+          case pushCoTyArg co arg_ty of
+            Just (arg_ty', m_co') -> {-#SCC "addCoerce-pushCoTyArg" #-}
+              do { tail' <- addCoerceM m_co' $ toScont tail
+                 ; return (toScont $ (fromScont cont) { sc_arg_ty = arg_ty', sc_cont = fromScont $ tail' }) }
+            Nothing ->
+              case isReflexiveCo co of
+                True -> return cont -- Having this at the end makes a huge
+                                    -- difference in T12227, for some reason
+                                    -- See Note [Optimising reflexivity]
+                False -> return (mkCastIt co cont)
 
-        addCoerce co cont@(fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
-                                      , sc_dup = dup, sc_cont = tail })
-          | Just (co1, m_co2) <- pushCoValArg co
-          , Pair _ new_ty <- coercionKind co1
-          , not (isTypeLevPoly new_ty)  -- Without this check, we get a lev-poly arg
-                                        -- See Note [Levity polymorphism invariants] in CoreSyn
-                                        -- test: typecheck/should_run/EtaExpandLevPoly
-          = {-#SCC "addCoerce-pushCoValArg" #-}
-            do { tail' <- addCoerceM m_co2 $ toScont tail
-               ; if isReflCo co1
-                 then return (toScont $ (fromScont cont) { sc_cont = fromScont tail' })
-                      -- Avoid simplifying if possible;
-                      -- See Note [Avoiding exponential behaviour]
-                 else do
-               { (dup', arg_se', arg') <- simplArg env dup arg_se arg
-                    -- When we build the ApplyTo we can't mix the OutCoercion
-                    -- 'co' with the InExpr 'arg', so we simplify
-                    -- to make it all consistent.  It's a bit messy.
-                    -- But it isn't a common case.
-                    -- Example of use: #995
-               ; return (mkApplyToVal dup' (mkCast arg' co1) arg_se' tail')
-               } }
 
-        addCoerce co cont
-          | isReflexiveCo co = return cont  -- Having this at the end makes a huge
-                                            -- difference in T12227, for some reason
-                                            -- See Note [Optimising reflexivity]
-          | otherwise        = return (mkCastIt co cont)
+        addCoerce cont@(fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
+                                      , sc_dup = dup, sc_cont = tail }) co =
+          case (pushCoValArg co) of
+            Just (co1, m_co2) | Pair _ new_ty <- coercionKind co1
+                              , not (isTypeLevPoly new_ty) -> {-#SCC "addCoerce-pushCoValArg" #-}
+                                -- Without this check, we get a lev-poly arg
+                                -- See Note [Levity polymorphism invariants] in CoreSyn
+                                -- test: typecheck/should_run/EtaExpandLevPoly
+              do { tail' <- addCoerceM m_co2 $ toScont tail
+                 ; if isReflCo co1
+                   then return (toScont $ (fromScont cont) { sc_cont = fromScont tail' })
+                        -- Avoid simplifying if possible;
+                        -- See Note [Avoiding exponential behaviour]
+                   else do
+                 { (dup', arg_se', arg') <- simplArg env dup arg_se arg
+                      -- When we build the ApplyTo we can't mix the OutCoercion
+                      -- 'co' with the InExpr 'arg', so we simplify
+                      -- to make it all consistent.  It's a bit messy.
+                      -- But it isn't a common case.
+                      -- Example of use: #995
+                 ; return (mkApplyToVal dup' (mkCast arg' co1) arg_se' tail')
+                 } }
+            _ ->
+              case isReflexiveCo co of
+                True -> return cont -- Having this at the end makes a huge
+                                    -- difference in T12227, for some reason
+                                    -- See Note [Optimising reflexivity]
+                False -> return (mkCastIt co cont)
+
+
+        addCoerce cont co =
+          case isReflexiveCo co of
+            True -> return cont -- Having this at the end makes a huge
+                                -- difference in T12227, for some reason
+                                -- See Note [Optimising reflexivity]
+            False -> return (mkCastIt co cont)
 
 simplArg :: SimplEnv -> DupFlag -> StaticEnv -> CoreExpr
          -> SimplM (DupFlag, StaticEnv, OutExpr)

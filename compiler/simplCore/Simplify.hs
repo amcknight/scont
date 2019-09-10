@@ -7,6 +7,7 @@
 {-# LANGUAGE CPP #-}
 {-# LANGUAGE ViewPatterns #-}
 {-# LANGUAGE TupleSections #-}
+{-# LANGUAGE MultiWayIf #-}
 
 module Simplify ( simplTopBinds, simplExpr, simplRules ) where
 
@@ -1165,24 +1166,31 @@ simplTick env tickish expr cont
       (\o c ->
         let mk = mkStop o c
         in (mkBoringStop (contHoleType mk), mk))   -- Stop
+
       (\cont co k ->
         let (inc, outc) = k
         in (mkCastIt co inc, outc))   -- CastIt
+
       (\cont dup ie se _ ->
         let mk = mkApplyToVal dup ie se cont
         in (mkBoringStop (contHoleType mk), mk))   -- ApplyToVal
+
       (\_ arg hole k  ->
         let (inc, outc) = k
         in (mkApplyToTy arg hole inc, outc))   -- ApplyToTy
+
       (\cont dup ia ie se _  ->
         let mk = mkSelect dup ia ie se cont
         in (mkBoringStop (contHoleType mk), mk))   -- Select
+
       (\cont dup ii ib ie se _ ->
         let mk = mkStrictBind dup ii ib ie se cont
         in (mkBoringStop (contHoleType mk), mk))   -- StrictBind
+
       (\cont dup info c _ ->
         let mk = mkStrictArg dup info c cont
         in (mkBoringStop (contHoleType mk), mk))   -- StrictArg
+
       (\cont t _ ->
         let mk = mkTickIt t cont
         in (mkBoringStop (contHoleType mk), mk))   -- TickIt
@@ -1264,7 +1272,7 @@ rebuild env expr cont = go cont expr
 
       )
 
-      (\cont dup fun cci _ expr -> rebuildCall env (fun `addValArgTo` expr) cont)
+      (\cont dup fun cci _ expr -> rebuildCall env cont (fun `addValArgTo` expr) )
 
       (\_ t k expr -> k $ mkTick t expr)
 
@@ -1859,7 +1867,7 @@ completeCall env var cont
   = do { rule_base <- getSimplRules
        ; let info = mkArgInfo env var (getRules rule_base var)
                               n_val_args call_cont
-       ; rebuildCall env info cont }
+       ; rebuildCall env cont info }
 
   where
     dflags = seDynFlags env
@@ -1881,8 +1889,8 @@ completeCall env var cont
                               text "Cont:  " <+> ppr cont])]
 
 rebuildCall :: SimplEnv
-            -> ArgInfo
             -> Scont
+            -> ArgInfo
             -> SimplM (SimplFloats, OutExpr)
 -- We decided not to inline, so
 --    - simplify the arguments
@@ -1890,7 +1898,7 @@ rebuildCall :: SimplEnv
 --    - and rebuild
 
 ---------- Bottoming applications --------------
-rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args, ai_strs = [] }) cont
+rebuildCall env cont (ArgInfo { ai_fun = fun, ai_args = rev_args, ai_strs = [] })
   -- When we run out of strictness args, it means
   -- that the call is definitely bottom; see SimplUtils.mkArgInfo
   -- Then we want to discard the entire strict continuation.  E.g.
@@ -1912,17 +1920,17 @@ rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args, ai_strs = [] }) con
 
 ---------- Try rewrite RULES --------------
 -- See Note [Trying rewrite rules]
-rebuildCall env info@(ArgInfo { ai_fun = fun, ai_args = rev_args
-                              , ai_rules = Just (nr_wanted, rules) }) cont
+rebuildCall env cont info@(ArgInfo { ai_fun = fun, ai_args = rev_args
+                              , ai_rules = Just (nr_wanted, rules) })
   | nr_wanted == 0 || no_more_args
-  , let info' = info { ai_rules = Nothing }
   = -- We've accumulated a simplified call in <fun,rev_args>
     -- so try rewrite rules; see Note [RULEs apply to simplified arguments]
     -- See also Note [Rules for recursive functions]
-    do { mb_match <- tryRules env rules fun (reverse rev_args) cont
+    do { let info' = info { ai_rules = Nothing }
+       ; mb_match <- tryRules env rules fun (reverse rev_args) cont
        ; case mb_match of
              Just (env', rhs, cont') -> simplExprF env' rhs cont'
-             Nothing                 -> rebuildCall env info' cont }
+             Nothing                 -> rebuildCall env cont info' }
   where
     no_more_args =
       runScont cont
@@ -1937,56 +1945,57 @@ rebuildCall env info@(ArgInfo { ai_fun = fun, ai_args = rev_args
 
 
 ---------- Simplify applications and casts --------------
-rebuildCall env info (fromScont -> CastIt co cont)
-  = rebuildCall env (addCastTo info co) $ toScont cont
+rebuildCall env (fromScont -> CastIt co cont) info
+  = rebuildCall env  (toScont cont) (addCastTo info co)
 
-rebuildCall env info (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont })
-  = rebuildCall env (addTyArgTo info arg_ty) $ toScont cont
+rebuildCall env (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont }) info
+  = rebuildCall env (toScont cont) (addTyArgTo info arg_ty)
 
-rebuildCall env info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
+rebuildCall env (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se , sc_dup = dup_flag, sc_cont = cont })
+                info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
                               , ai_strs = str:strs, ai_discs = disc:discs })
-            (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
-                        , sc_dup = dup_flag, sc_cont = cont })
-  | isSimplified dup_flag     -- See Note [Avoid redundant simplification]
-  = rebuildCall env (addValArgTo info' arg) $ toScont cont
 
-  | str         -- Strict argument
-  , sm_case_case (getMode env)
-  = -- pprTrace "Strict Arg" (ppr arg $$ ppr (seIdSubst env) $$ ppr (seInScope env)) $
-    simplExprF (arg_se `setInScopeFromE` env) arg
-               (mkStrictArg Simplified info' cci_strict $ toScont cont)
-                -- Note [Shadowing]
+  = let
+        info'  = info { ai_strs = strs, ai_discs = discs }
+        arg_ty = funArgTy fun_ty
 
-  | otherwise                           -- Lazy argument
+        -- Use this for lazy arguments
+        cci_lazy | encl_rules = RuleArgCtxt
+                 | disc > 0   = DiscArgCtxt  -- Be keener here
+                 | otherwise  = BoringCtxt   -- Nothing interesting
+
+        -- ..and this for strict arguments
+        cci_strict | encl_rules = RuleArgCtxt
+                   | disc > 0   = DiscArgCtxt
+                   | otherwise  = RhsCtxt
+          -- Why RhsCtxt?  if we see f (g x) (h x), and f is strict, we
+          -- want to be a bit more eager to inline g, because it may
+          -- expose an eval (on x perhaps) that can be eliminated or
+          -- shared. I saw this in nofib 'boyer2', RewriteFuns.onewayunify1
+          -- It's worth an 18% improvement in allocation for this
+          -- particular benchmark; 5% on 'mate' and 1.3% on 'multiplier'
+        in
+    if  | isSimplified dup_flag     -- See Note [Avoid redundant simplification]
+        -> rebuildCall env (toScont cont) (addValArgTo info' arg)
+
+        | str         -- Strict argument
+        , sm_case_case (getMode env)
+        ->  -- pprTrace "Strict Arg" (ppr arg $$ ppr (seIdSubst env) $$ ppr (seInScope env)) $
+          simplExprF (arg_se `setInScopeFromE` env) arg
+                     (mkStrictArg Simplified info' cci_strict $ toScont cont)
+                      -- Note [Shadowing]
+
+        | otherwise -- Lazy argument
         -- DO NOT float anything outside, hence simplExprC
         -- There is no benefit (unlike in a let-binding), and we'd
         -- have to be very careful about bogus strictness through
         -- floating a demanded let.
-  = do  { arg' <- simplExprC (arg_se `setInScopeFromE` env) arg
-                             (mkLazyArgStop arg_ty cci_lazy)
-        ; rebuildCall env (addValArgTo info' arg') $ toScont cont }
-  where
-    info'  = info { ai_strs = strs, ai_discs = discs }
-    arg_ty = funArgTy fun_ty
-
-    -- Use this for lazy arguments
-    cci_lazy | encl_rules = RuleArgCtxt
-             | disc > 0   = DiscArgCtxt  -- Be keener here
-             | otherwise  = BoringCtxt   -- Nothing interesting
-
-    -- ..and this for strict arguments
-    cci_strict | encl_rules = RuleArgCtxt
-               | disc > 0   = DiscArgCtxt
-               | otherwise  = RhsCtxt
-      -- Why RhsCtxt?  if we see f (g x) (h x), and f is strict, we
-      -- want to be a bit more eager to inline g, because it may
-      -- expose an eval (on x perhaps) that can be eliminated or
-      -- shared. I saw this in nofib 'boyer2', RewriteFuns.onewayunify1
-      -- It's worth an 18% improvement in allocation for this
-      -- particular benchmark; 5% on 'mate' and 1.3% on 'multiplier'
+        ->  do  { arg' <- simplExprC (arg_se `setInScopeFromE` env) arg
+                                  (mkLazyArgStop arg_ty cci_lazy)
+             ; rebuildCall env (toScont cont) (addValArgTo info' arg') }
 
 ---------- No further useful info, revert to generic rebuild ------------
-rebuildCall env (ArgInfo { ai_fun = fun, ai_args = rev_args }) cont
+rebuildCall env cont (ArgInfo { ai_fun = fun, ai_args = rev_args })
   = rebuild env (argInfoExpr fun rev_args) cont
 
 {- Note [Trying rewrite rules]

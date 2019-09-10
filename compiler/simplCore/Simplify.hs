@@ -1301,61 +1301,104 @@ simplCast env body co0 cont0
         addCoerceM (MCo co) cont = addCoerce cont co
 
         addCoerce :: Scont -> OutCoercion -> SimplM Scont
-        addCoerce (fromScont -> CastIt co2 cont) co1 =
-          let co' = mkTransCo co1 co2
-           in case isReflexiveCo co' of
-                True -> return $ toScont cont
-                False -> addCoerce (toScont cont) co'
-
-        addCoerce cont@(fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = tail }) co =
-          case pushCoTyArg co arg_ty of
-            Just (arg_ty', m_co') -> {-#SCC "addCoerce-pushCoTyArg" #-}
-              do { tail' <- addCoerceM m_co' $ toScont tail
-                 ; return (toScont $ (fromScont cont) { sc_arg_ty = arg_ty', sc_cont = fromScont $ tail' }) }
-            Nothing ->
+        addCoerce scont = runScont scont
+          (\m n co ->
+              let cont = mkStop m n in
               case isReflexiveCo co of
                 True -> return cont -- Having this at the end makes a huge
                                     -- difference in T12227, for some reason
                                     -- See Note [Optimising reflexivity]
                 False -> return (mkCastIt co cont)
+            )    -- Stop
 
+          (\cont co2 k co1 ->
+              let co' = mkTransCo co1 co2
+               in case isReflexiveCo co' of
+                    True -> return cont
+                    False -> k co'
+            )   -- CastIt
 
-        addCoerce cont@(fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
-                                      , sc_dup = dup, sc_cont = tail }) co =
-          case (pushCoValArg co) of
-            Just (co1, m_co2) | Pair _ new_ty <- coercionKind co1
-                              , not (isTypeLevPoly new_ty) -> {-#SCC "addCoerce-pushCoValArg" #-}
-                                -- Without this check, we get a lev-poly arg
-                                -- See Note [Levity polymorphism invariants] in CoreSyn
-                                -- test: typecheck/should_run/EtaExpandLevPoly
-              do { tail' <- addCoerceM m_co2 $ toScont tail
-                 ; if isReflCo co1
-                   then return (toScont $ (fromScont cont) { sc_cont = fromScont tail' })
-                        -- Avoid simplifying if possible;
-                        -- See Note [Avoiding exponential behaviour]
-                   else do
-                 { (dup', arg_se', arg') <- simplArg env dup arg_se arg
-                      -- When we build the ApplyTo we can't mix the OutCoercion
-                      -- 'co' with the InExpr 'arg', so we simplify
-                      -- to make it all consistent.  It's a bit messy.
-                      -- But it isn't a common case.
-                      -- Example of use: #995
-                 ; return (mkApplyToVal dup' (mkCast arg' co1) arg_se' tail')
-                 } }
-            _ ->
+          (\tail dup arg arg_se _ co ->
+             case (pushCoValArg co) of
+               Just (co1, m_co2) | Pair _ new_ty <- coercionKind co1
+                                 , not (isTypeLevPoly new_ty) -> {-#SCC "addCoerce-pushCoValArg" #-}
+                                   -- Without this check, we get a lev-poly arg
+                                   -- See Note [Levity polymorphism invariants] in CoreSyn
+                                   -- test: typecheck/should_run/EtaExpandLevPoly
+                 do { tail' <- addCoerceM m_co2 tail
+                    ; if isReflCo co1
+                      then return $ mkApplyToVal dup arg arg_se tail'
+                           -- Avoid simplifying if possible;
+                           -- See Note [Avoiding exponential behaviour]
+                      else do
+                    { (dup', arg_se', arg') <- simplArg env dup arg_se arg
+                         -- When we build the ApplyTo we can't mix the OutCoercion
+                         -- 'co' with the InExpr 'arg', so we simplify
+                         -- to make it all consistent.  It's a bit messy.
+                         -- But it isn't a common case.
+                         -- Example of use: #995
+                    ; return (mkApplyToVal dup' (mkCast arg' co1) arg_se' tail')
+                    } }
+               _ -> let cont = mkApplyToVal dup arg arg_se tail in
+                 case isReflexiveCo co of
+                   True -> return cont -- Having this at the end makes a huge
+                                       -- difference in T12227, for some reason
+                                       -- See Note [Optimising reflexivity]
+                   False -> return (mkCastIt co cont)
+            )   -- ApplyToVal
+
+          (\tail arg_ty hole_ty _ co ->
+              case pushCoTyArg co arg_ty of
+                Just (arg_ty', m_co') -> {-#SCC "addCoerce-pushCoTyArg" #-}
+                  do { tail' <- addCoerceM m_co' tail
+                     ; return $ mkApplyToTy arg_ty' hole_ty tail' }
+                Nothing ->
+                  let cont = mkApplyToTy arg_ty hole_ty tail
+                   in case isReflexiveCo co of
+                        True -> return cont -- Having this at the end makes a huge
+                                            -- difference in T12227, for some reason
+                                            -- See Note [Optimising reflexivity]
+                        False -> return (mkCastIt co cont)
+            )   -- ApplyToTy
+
+          (\tail m n o p _ co   ->
+              let cont = mkSelect m n o p tail in
               case isReflexiveCo co of
                 True -> return cont -- Having this at the end makes a huge
                                     -- difference in T12227, for some reason
                                     -- See Note [Optimising reflexivity]
                 False -> return (mkCastIt co cont)
+            )   -- Select
+
+          (\tail m n o p q _ co ->
+              let cont = mkStrictBind m n o p q tail in
+              case isReflexiveCo co of
+                True -> return cont -- Having this at the end makes a huge
+                                    -- difference in T12227, for some reason
+                                    -- See Note [Optimising reflexivity]
+                False -> return (mkCastIt co cont)
+            )    -- StrictBind
+
+          (\tail m n o _ co ->
+              let cont = mkStrictArg m n o tail in
+              case isReflexiveCo co of
+                True -> return cont -- Having this at the end makes a huge
+                                    -- difference in T12227, for some reason
+                                    -- See Note [Optimising reflexivity]
+                False -> return (mkCastIt co cont)
+            )    -- StrictArg
+
+          (\tail m _ co ->
+              let cont = mkTickIt m tail in
+              case isReflexiveCo co of
+                True -> return cont -- Having this at the end makes a huge
+                                    -- difference in T12227, for some reason
+                                    -- See Note [Optimising reflexivity]
+                False -> return (mkCastIt co cont)
+            )   -- TickIt
 
 
-        addCoerce cont co =
-          case isReflexiveCo co of
-            True -> return cont -- Having this at the end makes a huge
-                                -- difference in T12227, for some reason
-                                -- See Note [Optimising reflexivity]
-            False -> return (mkCastIt co cont)
+
 
 simplArg :: SimplEnv -> DupFlag -> StaticEnv -> CoreExpr
          -> SimplM (DupFlag, StaticEnv, OutExpr)

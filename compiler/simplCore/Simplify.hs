@@ -1725,19 +1725,52 @@ trimJoinCont :: Id -> Maybe JoinArity -> Scont -> Scont
 trimJoinCont _ Nothing cont
   = cont -- Not a jump
 trimJoinCont var (Just arity) cont
-  = toScont $ trim (fromScont cont) arity
+  = trim cont arity
   where
-    trim :: SimplCont -> Int -> SimplCont
-    trim cont@(Stop {}) 0
-      = cont
-    trim cont 0
-      = fromScont $ mkBoringStop (contResultType $ toScont cont)
-    trim cont@(ApplyToVal { sc_cont = k }) n
-      = cont { sc_cont = trim k (n-1) }
-    trim cont@(ApplyToTy { sc_cont = k }) n
-      = cont { sc_cont = trim k (n-1) } -- join arity counts types!
-    trim cont _
-      = pprPanic "completeCall" $ ppr var $$ ppr cont
+    trim :: Scont -> Int -> Scont
+    trim scont =
+      runScont scont
+        (\m n arity -> let cont = mkStop m n in
+          case arity of
+            0 -> cont
+            _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
+        )    -- Stop
+        (\tail m _ arity -> let cont = mkCastIt m tail in
+          case arity of
+            0 -> mkBoringStop (contResultType cont)
+            _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
+        )   -- CastIt
+        (\tail m n o k arity ->
+          case arity of
+            0 -> mkBoringStop $ contResultType $ mkApplyToVal m n o tail
+            _ -> mkApplyToVal m n o $ k (arity-1)
+        )   -- ApplyToVal
+        (\tail m n k arity ->
+          case arity of
+            0 -> mkBoringStop $ contResultType $ mkApplyToTy m n tail
+            _ -> mkApplyToTy m n $ k (arity-1)  -- join arity counts types!
+        )   -- ApplyToTy
+        (\tail m n o p  _   arity -> let cont = mkSelect m n o p tail in
+          case arity of
+            0 -> mkBoringStop (contResultType cont)
+            _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
+        )   -- Select
+        (\tail m n o p q _ arity -> let cont = mkStrictBind m n o p q tail in
+          case arity of
+            0 -> mkBoringStop (contResultType cont)
+            _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
+        )    -- StrictBind
+        (\tail m n o _      arity -> let cont = mkStrictArg m n o tail in
+          case arity of
+            0 -> mkBoringStop (contResultType cont)
+            _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
+        )    -- StrictArg
+        (\tail m _          arity -> let cont = mkTickIt m tail in
+          case arity of
+            0 -> mkBoringStop (contResultType cont)
+            _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
+        )   -- TickIt
+
 
 
 {- Note [Join points and case-of-case]

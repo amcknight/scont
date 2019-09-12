@@ -2055,46 +2055,54 @@ rebuildCall env scont =
     )   -- CastIt
 
     (oneShot $ \cont dup_flag arg arg_se k info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
-                                               , ai_strs = str:strs, ai_discs = disc:discs }) ->
+                                               , ai_strs = ss, ai_discs = ds
+                                                         , ai_fun = fun, ai_args = rev_args
+                                                         }) ->
       let me = mkApplyToVal dup_flag arg arg_se cont in
-      tryIt env me info $ let
-            info'  = info { ai_strs = strs, ai_discs = discs }
-            arg_ty = funArgTy fun_ty
+      tryIt env me info $
+        case (ss, ds) of
+          (str:strs, disc:discs) ->
+            let
+                info'  = info { ai_strs = strs, ai_discs = discs }
+                arg_ty = funArgTy fun_ty
 
-            -- Use this for lazy arguments
-            cci_lazy | encl_rules = RuleArgCtxt
-                     | disc > 0   = DiscArgCtxt  -- Be keener here
-                     | otherwise  = BoringCtxt   -- Nothing interesting
+                -- Use this for lazy arguments
+                cci_lazy | encl_rules = RuleArgCtxt
+                         | disc > 0   = DiscArgCtxt  -- Be keener here
+                         | otherwise  = BoringCtxt   -- Nothing interesting
 
-            -- ..and this for strict arguments
-            cci_strict | encl_rules = RuleArgCtxt
-                       | disc > 0   = DiscArgCtxt
-                       | otherwise  = RhsCtxt
-              -- Why RhsCtxt?  if we see f (g x) (h x), and f is strict, we
-              -- want to be a bit more eager to inline g, because it may
-              -- expose an eval (on x perhaps) that can be eliminated or
-              -- shared. I saw this in nofib 'boyer2', RewriteFuns.onewayunify1
-              -- It's worth an 18% improvement in allocation for this
-              -- particular benchmark; 5% on 'mate' and 1.3% on 'multiplier'
-            in
-        if  | isSimplified dup_flag     -- See Note [Avoid redundant simplification]
-            -> rebuildCall env cont (addValArgTo info' arg)
+                -- ..and this for strict arguments
+                cci_strict | encl_rules = RuleArgCtxt
+                           | disc > 0   = DiscArgCtxt
+                           | otherwise  = RhsCtxt
+                  -- Why RhsCtxt?  if we see f (g x) (h x), and f is strict, we
+                  -- want to be a bit more eager to inline g, because it may
+                  -- expose an eval (on x perhaps) that can be eliminated or
+                  -- shared. I saw this in nofib 'boyer2', RewriteFuns.onewayunify1
+                  -- It's worth an 18% improvement in allocation for this
+                  -- particular benchmark; 5% on 'mate' and 1.3% on 'multiplier'
+                in
+            if  | isSimplified dup_flag     -- See Note [Avoid redundant simplification]
+                -> rebuildCall env cont (addValArgTo info' arg)
 
-            | str         -- Strict argument
-            , sm_case_case (getMode env)
-            ->  -- pprTrace "Strict Arg" (ppr arg $$ ppr (seIdSubst env) $$ ppr (seInScope env)) $
-              simplExprF (arg_se `setInScopeFromE` env) arg
-                         (mkStrictArg Simplified info' cci_strict cont)
-                          -- Note [Shadowing]
+                | str         -- Strict argument
+                , sm_case_case (getMode env)
+                ->  -- pprTrace "Strict Arg" (ppr arg $$ ppr (seIdSubst env) $$ ppr (seInScope env)) $
+                  simplExprF (arg_se `setInScopeFromE` env) arg
+                             (mkStrictArg Simplified info' cci_strict cont)
+                              -- Note [Shadowing]
 
-            | otherwise -- Lazy argument
-            -- DO NOT float anything outside, hence simplExprC
-            -- There is no benefit (unlike in a let-binding), and we'd
-            -- have to be very careful about bogus strictness through
-            -- floating a demanded let.
-            ->  do  { arg' <- simplExprC (arg_se `setInScopeFromE` env) arg
-                                      (mkLazyArgStop arg_ty cci_lazy)
-                 ; rebuildCall env cont (addValArgTo info' arg') }
+                | otherwise -- Lazy argument
+                -- DO NOT float anything outside, hence simplExprC
+                -- There is no benefit (unlike in a let-binding), and we'd
+                -- have to be very careful about bogus strictness through
+                -- floating a demanded let.
+                ->  do  { arg' <- simplExprC (arg_se `setInScopeFromE` env) arg
+                                          (mkLazyArgStop arg_ty cci_lazy)
+                     ; rebuildCall env cont (addValArgTo info' arg') }
+
+          _ ->
+            tryIt env me info $ rebuild env (argInfoExpr fun rev_args) me
 
     )   -- ApplyToVal
 

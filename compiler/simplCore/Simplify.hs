@@ -60,6 +60,9 @@ import Module          ( moduleName, pprModuleName )
 import PrimOp          ( PrimOp (SeqOp) )
 
 
+import GHC.Magic ( oneShot )
+
+
 
 {-
 The guts of the simplifier is in this module, but the driver loop for
@@ -1164,35 +1167,35 @@ simplTick env tickish expr cont
   splitCont :: Scont -> (Scont, Scont)
   splitCont scont =
     runScont scont
-      (\o c ->
+      (oneShot $ \o c ->
         let mk = mkStop o c
         in (mkBoringStop (contHoleType mk), mk))   -- Stop
 
-      (\cont co k ->
+      (oneShot $ \cont co k ->
         let (inc, outc) = k
         in (mkCastIt co inc, outc))   -- CastIt
 
-      (\cont dup ie se _ ->
+      (oneShot $ \cont dup ie se _ ->
         let mk = mkApplyToVal dup ie se cont
         in (mkBoringStop (contHoleType mk), mk))   -- ApplyToVal
 
-      (\_ arg hole k  ->
+      (oneShot $ \_ arg hole k  ->
         let (inc, outc) = k
         in (mkApplyToTy arg hole inc, outc))   -- ApplyToTy
 
-      (\cont dup ia ie se _  ->
+      (oneShot $ \cont dup ia ie se _  ->
         let mk = mkSelect dup ia ie se cont
         in (mkBoringStop (contHoleType mk), mk))   -- Select
 
-      (\cont dup ii ib ie se _ ->
+      (oneShot $ \cont dup ii ib ie se _ ->
         let mk = mkStrictBind dup ii ib ie se cont
         in (mkBoringStop (contHoleType mk), mk))   -- StrictBind
 
-      (\cont dup info c _ ->
+      (oneShot $ \cont dup info c _ ->
         let mk = mkStrictArg dup info c cont
         in (mkBoringStop (contHoleType mk), mk))   -- StrictArg
 
-      (\cont t _ ->
+      (oneShot $ \cont t _ ->
         let mk = mkTickIt t cont
         in (mkBoringStop (contHoleType mk), mk))   -- TickIt
 
@@ -1247,24 +1250,24 @@ rebuild env expr cont = go cont expr
   where
     go :: Scont -> OutExpr -> SimplM (SimplFloats, OutExpr)
     go cont = runScont cont
-      (\_ _ expr -> return (emptyFloats env, expr))
+      (oneShot $ \_ _ expr -> return (emptyFloats env, expr))
 
-      (\jg co k expr -> k (mkCast expr co))
+      (oneShot $ \jg co k expr -> k (mkCast expr co))
                         -- NB: mkCast implements the (Coercion co |> g) optimisation
 
-      (\_ dup_flag arg se k expr ->
+      (oneShot $ \_ dup_flag arg se k expr ->
         -- See Note [Avoid redundant simplification]
         do { (_, _, arg') <- simplArg env dup_flag se arg
            ; k $ App expr arg'}
         )
 
-      (\_ ty _ k expr -> k $ App expr $ Type ty)
+      (oneShot $ \_ ty _ k expr -> k $ App expr $ Type ty)
 
-      (\cont dup bndr alts se _ expr ->
+      (oneShot $ \cont dup bndr alts se _ expr ->
         rebuildCase (se `setInScopeFromE` env) expr bndr alts cont
       )
 
-      (\cont dup b bs body se _ expr ->
+      (oneShot $ \cont dup b bs body se _ expr ->
          do { (floats1, env') <- simplNonRecX (se `setInScopeFromE` env) b expr
                                 -- expr satisfies let/app since it started life
                                 -- in a call to simplNonRecE
@@ -1273,9 +1276,9 @@ rebuild env expr cont = go cont expr
 
       )
 
-      (\cont dup fun cci _ expr -> rebuildCall env cont (fun `addValArgTo` expr) )
+      (oneShot $ \cont dup fun cci _ expr -> rebuildCall env cont (fun `addValArgTo` expr) )
 
-      (\_ t k expr -> k $ mkTick t expr)
+      (oneShot $ \_ t k expr -> k $ mkTick t expr)
 
 {-
 ************************************************************************
@@ -1332,7 +1335,7 @@ simplCast env body co0 cont0
 
         addCoerce :: Scont -> OutCoercion -> SimplM Scont
         addCoerce scont = runScont scont
-          (\m n co ->
+          (oneShot $ \m n co ->
               let cont = mkStop m n in
               case isReflexiveCo co of
                 True -> return cont -- Having this at the end makes a huge
@@ -1341,14 +1344,14 @@ simplCast env body co0 cont0
                 False -> return (mkCastIt co cont)
             )    -- Stop
 
-          (\cont co2 k co1 ->
+          (oneShot $ \cont co2 k co1 ->
               let co' = mkTransCo co1 co2
                in case isReflexiveCo co' of
                     True -> return cont
                     False -> k co'
             )   -- CastIt
 
-          (\tail dup arg arg_se _ co ->
+          (oneShot $ \tail dup arg arg_se _ co ->
              case (pushCoValArg co) of
                Just (co1, m_co2) | Pair _ new_ty <- coercionKind co1
                                  , not (isTypeLevPoly new_ty) -> {-#SCC "addCoerce-pushCoValArg" #-}
@@ -1377,7 +1380,7 @@ simplCast env body co0 cont0
                    False -> return (mkCastIt co cont)
             )   -- ApplyToVal
 
-          (\tail arg_ty hole_ty _ co ->
+          (oneShot $ \tail arg_ty hole_ty _ co ->
               case pushCoTyArg co arg_ty of
                 Just (arg_ty', m_co') -> {-#SCC "addCoerce-pushCoTyArg" #-}
                   do { tail' <- addCoerceM m_co' tail
@@ -1391,7 +1394,7 @@ simplCast env body co0 cont0
                         False -> return (mkCastIt co cont)
             )   -- ApplyToTy
 
-          (\tail m n o p _ co   ->
+          (oneShot $ \tail m n o p _ co   ->
               let cont = mkSelect m n o p tail in
               case isReflexiveCo co of
                 True -> return cont -- Having this at the end makes a huge
@@ -1400,7 +1403,7 @@ simplCast env body co0 cont0
                 False -> return (mkCastIt co cont)
             )   -- Select
 
-          (\tail m n o p q _ co ->
+          (oneShot $ \tail m n o p q _ co ->
               let cont = mkStrictBind m n o p q tail in
               case isReflexiveCo co of
                 True -> return cont -- Having this at the end makes a huge
@@ -1409,7 +1412,7 @@ simplCast env body co0 cont0
                 False -> return (mkCastIt co cont)
             )    -- StrictBind
 
-          (\tail m n o _ co ->
+          (oneShot $ \tail m n o _ co ->
               let cont = mkStrictArg m n o tail in
               case isReflexiveCo co of
                 True -> return cont -- Having this at the end makes a huge
@@ -1418,7 +1421,7 @@ simplCast env body co0 cont0
                 False -> return (mkCastIt co cont)
             )    -- StrictArg
 
-          (\tail m _ co ->
+          (oneShot $ \tail m _ co ->
               let cont = mkTickIt m tail in
               case isReflexiveCo co of
                 True -> return cont -- Having this at the end makes a huge
@@ -1451,7 +1454,7 @@ simplLam :: Scont -> SimplEnv -> [InId] -> InExpr
          -> SimplM (SimplFloats, OutExpr)
 simplLam scont =
   runScont scont
-    (\m n env bndrs body -> let cont = mkStop m n in
+    (oneShot $ \m n env bndrs body -> let cont = mkStop m n in
       case bndrs of
         [] -> simplExprF env body cont
         _ ->
@@ -1461,7 +1464,7 @@ simplLam scont =
               ; rebuild env' new_lam cont }
     )    -- Stop
 
-    (\tail m _ env bndrs body -> let cont = mkCastIt m tail in
+    (oneShot $ \tail m _ env bndrs body -> let cont = mkCastIt m tail in
       case bndrs of
         [] -> simplExprF env body cont
         _ ->
@@ -1471,7 +1474,7 @@ simplLam scont =
               ; rebuild env' new_lam cont }
     )   -- CastIt
 
-    (\cont dup arg arg_se k env bs body ->
+    (oneShot $ \cont dup arg arg_se k env bs body ->
       case bs of
         [] -> simplExprF env body $ mkApplyToVal dup arg arg_se cont
         (bndr:bndrs) ->
@@ -1492,7 +1495,7 @@ simplLam scont =
 
     )   -- ApplyToVal
 
-    (\cont arg_ty hole_ty k env bs body ->
+    (oneShot $ \cont arg_ty hole_ty k env bs body ->
       case bs of
         [] -> simplExprF env body $ mkApplyToTy arg_ty hole_ty cont
         (bndr:bndrs) ->
@@ -1500,7 +1503,7 @@ simplLam scont =
              ; k (extendTvSubst env bndr arg_ty) bndrs body  }
     )   -- ApplyToTy
 
-    (\tail m n o p _   env bndrs body -> let cont = mkSelect m n o p tail in
+    (oneShot $ \tail m n o p _   env bndrs body -> let cont = mkSelect m n o p tail in
       case bndrs of
         [] -> simplExprF env body cont
         _ ->
@@ -1510,7 +1513,7 @@ simplLam scont =
               ; rebuild env' new_lam cont }
     )   -- Select
 
-    (\tail m n o p q _ env bndrs body -> let cont = mkStrictBind m n o p q tail in
+    (oneShot $ \tail m n o p q _ env bndrs body -> let cont = mkStrictBind m n o p q tail in
       case bndrs of
         [] -> simplExprF env body cont
         _ ->
@@ -1520,7 +1523,7 @@ simplLam scont =
               ; rebuild env' new_lam cont }
     )    -- StrictBind
 
-    (\tail m n o _ env bndrs body -> let cont = mkStrictArg m n o tail in
+    (oneShot $ \tail m n o _ env bndrs body -> let cont = mkStrictArg m n o tail in
       case bndrs of
         [] -> simplExprF env body cont
         _ ->
@@ -1534,7 +1537,7 @@ simplLam scont =
       -- cost attribution slightly (moving the allocation of the
       -- lambda elsewhere), but we don't care: optimisation changes
       -- cost attribution all the time.
-    (\cont tickish k env bndrs body -> let me = mkTickIt tickish cont in
+    (oneShot $ \cont tickish k env bndrs body -> let me = mkTickIt tickish cont in
       case bndrs of
         [] -> simplExprF env body me
         _ ->
@@ -1789,42 +1792,42 @@ trimJoinCont var (Just arity) cont
     trim :: Scont -> Int -> Scont
     trim scont =
       runScont scont
-        (\m n arity -> let cont = mkStop m n in
+        (oneShot $ \m n arity -> let cont = mkStop m n in
           case arity of
             0 -> cont
             _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
         )    -- Stop
-        (\tail m _ arity -> let cont = mkCastIt m tail in
+        (oneShot $ \tail m _ arity -> let cont = mkCastIt m tail in
           case arity of
             0 -> mkBoringStop (contResultType cont)
             _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
         )   -- CastIt
-        (\tail m n o k arity ->
+        (oneShot $ \tail m n o k arity ->
           case arity of
             0 -> mkBoringStop $ contResultType $ mkApplyToVal m n o tail
             _ -> mkApplyToVal m n o $ k (arity-1)
         )   -- ApplyToVal
-        (\tail m n k arity ->
+        (oneShot $ \tail m n k arity ->
           case arity of
             0 -> mkBoringStop $ contResultType $ mkApplyToTy m n tail
             _ -> mkApplyToTy m n $ k (arity-1)  -- join arity counts types!
         )   -- ApplyToTy
-        (\tail m n o p  _   arity -> let cont = mkSelect m n o p tail in
+        (oneShot $ \tail m n o p  _   arity -> let cont = mkSelect m n o p tail in
           case arity of
             0 -> mkBoringStop (contResultType cont)
             _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
         )   -- Select
-        (\tail m n o p q _ arity -> let cont = mkStrictBind m n o p q tail in
+        (oneShot $ \tail m n o p q _ arity -> let cont = mkStrictBind m n o p q tail in
           case arity of
             0 -> mkBoringStop (contResultType cont)
             _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
         )    -- StrictBind
-        (\tail m n o _      arity -> let cont = mkStrictArg m n o tail in
+        (oneShot $ \tail m n o _      arity -> let cont = mkStrictArg m n o tail in
           case arity of
             0 -> mkBoringStop (contResultType cont)
             _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
         )    -- StrictArg
-        (\tail m _          arity -> let cont = mkTickIt m tail in
+        (oneShot $ \tail m _          arity -> let cont = mkTickIt m tail in
           case arity of
             0 -> mkBoringStop (contResultType cont)
             _ -> pprPanic "completeCall" $ ppr var $$ ppr cont
@@ -2022,14 +2025,14 @@ tryIt env cont info@(ArgInfo { ai_fun = fun, ai_args = rev_args
   where
     no_more_args =
       runScont cont
-        (\_ _         -> True)   -- Stop
-        (\_ _ _         -> True)   -- CastIt
-        (\_ _ _ _ _     -> False)  -- ApplyToVal
-        (\_ _ _ _       -> False)  -- ApplyToTy
-        (\_ _ _ _ _ _   -> True)   -- Select
-        (\_ _ _ _ _ _ _ -> True)   -- StrictBind
-        (\_ _ _ _ _     -> True)   -- StrictArg
-        (\_ _ _         -> True)   -- TickIt
+        (oneShot $ \_ _         -> True)   -- Stop
+        (oneShot $ \_ _ _         -> True)   -- CastIt
+        (oneShot $ \_ _ _ _ _     -> False)  -- ApplyToVal
+        (oneShot $ \_ _ _ _       -> False)  -- ApplyToTy
+        (oneShot $ \_ _ _ _ _ _   -> True)   -- Select
+        (oneShot $ \_ _ _ _ _ _ _ -> True)   -- StrictBind
+        (oneShot $ \_ _ _ _ _     -> True)   -- StrictArg
+        (oneShot $ \_ _ _         -> True)   -- TickIt
 
 tryIt env cont info z = z
 
@@ -2041,17 +2044,17 @@ rebuildCall :: SimplEnv
             -> SimplM (SimplFloats, OutExpr)
 rebuildCall env scont =
   runScont scont
-    (\m n info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
+    (oneShot $ \m n info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
       let cont = mkStop m n in
       tryIt env cont info $ rebuild env (argInfoExpr fun rev_args) cont
     )    -- Stop
 
-    (\tail co k info ->
+    (oneShot $ \tail co k info ->
       let me = mkCastIt co tail in
       tryIt env me info $ k (addCastTo info co)
     )   -- CastIt
 
-    (\cont dup_flag arg arg_se k info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
+    (oneShot $ \cont dup_flag arg arg_se k info@(ArgInfo { ai_encl = encl_rules, ai_type = fun_ty
                                                , ai_strs = str:strs, ai_discs = disc:discs }) ->
       let me = mkApplyToVal dup_flag arg arg_se cont in
       tryIt env me info $ let
@@ -2095,27 +2098,27 @@ rebuildCall env scont =
 
     )   -- ApplyToVal
 
-    (\tail arg_ty hole_ty k info ->
+    (oneShot $ \tail arg_ty hole_ty k info ->
       let me = mkApplyToTy arg_ty hole_ty tail in
       tryIt env me info $ k (addTyArgTo info arg_ty)
     )   -- ApplyToTy
 
-    (\tail m n o p _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
+    (oneShot $ \tail m n o p _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
       let cont = mkSelect m n o p tail in
       tryIt env cont info $ rebuild env (argInfoExpr fun rev_args) cont
     )   -- Select
 
-    (\tail m n o p q _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
+    (oneShot $ \tail m n o p q _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
       let cont = mkStrictBind m n o p q tail in
       tryIt env cont info $ rebuild env (argInfoExpr fun rev_args) cont
     )    -- StrictBind
 
-    (\tail m n o _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
+    (oneShot $ \tail m n o _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
       let cont = mkStrictArg m n o tail in
       tryIt env cont info $ rebuild env (argInfoExpr fun rev_args) cont
     )    -- StrictArg
 
-    (\tail m _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
+    (oneShot $ \tail m _ info@(ArgInfo { ai_fun = fun, ai_args = rev_args }) ->
       let cont = mkTickIt m tail in
       tryIt env cont info $ rebuild env (argInfoExpr fun rev_args) cont
     )   -- TickIt
@@ -3259,13 +3262,13 @@ mkDupableCont :: SimplEnv -> Scont
                                        --   extra let/join-floats and in-scope variables
                         , Scont)   -- dup_cont: duplicable continuation
 mkDupableCont env scont = runScont scont
-  (\m n -> returnIfContDupable env (mkStop m n) $ panic "mkDupableCont")     -- Handled by previous eqn
+  (oneShot $ \m n -> returnIfContDupable env (mkStop m n) $ panic "mkDupableCont")     -- Handled by previous eqn
 
-  (\jh ty k -> returnIfContDupable env (mkCastIt ty jh) $
+  (oneShot $ \jh ty k -> returnIfContDupable env (mkCastIt ty jh) $
     do  { (floats, cont') <- k
         ; return (floats, mkCastIt ty cont') })
 
-  (\jh dup arg se k -> returnIfContDupable env (mkApplyToVal dup arg se jh) $
+  (oneShot $ \jh dup arg se k -> returnIfContDupable env (mkApplyToVal dup arg se jh) $
      -- e.g.         [...hole...] (...arg...)
      --      ==>
      --              let a = ...arg...
@@ -3284,12 +3287,12 @@ mkDupableCont env scont = runScont scont
                                          -- See Note [StaticEnv invariant] in SimplUtils
                               ) })
 
-  (\jh arg_ty hole_ty k -> returnIfContDupable env (mkApplyToTy arg_ty hole_ty jh) $
+  (oneShot $ \jh arg_ty hole_ty k -> returnIfContDupable env (mkApplyToTy arg_ty hole_ty jh) $
     do  { (floats, cont') <- k
         ; return (floats, mkApplyToTy arg_ty hole_ty cont'
                                       ) })
 
-  (\cont dup case_bndr alts se _ -> returnIfContDupable env (mkSelect dup case_bndr alts se cont) $
+  (oneShot $ \cont dup case_bndr alts se _ -> returnIfContDupable env (mkSelect dup case_bndr alts se cont) $
          -- e.g.         (case [...hole...] of { pi -> ei })
             --      ===>
             --              let ji = \xij -> ei
@@ -3330,7 +3333,7 @@ mkDupableCont env scont = runScont scont
                                           -- See Note [StaticEnv invariant] in SimplUtils
                                 (mkBoringStop (contResultType cont)) ) })
 
-  (\cont dup bndr bndrs body se _ -> returnIfContDupable env (mkStrictBind dup bndr bndrs body se cont) $
+  (oneShot $ \cont dup bndr bndrs body se _ -> returnIfContDupable env (mkStrictBind dup bndr bndrs body se cont) $
     -- See Note [Duplicating StrictBind]
        do { let sb_env = se `setInScopeFromE` env
            ; (sb_env1, bndr') <- simplBinder sb_env bndr
@@ -3354,7 +3357,7 @@ mkDupableCont env scont = runScont scont
                     , mkStrictBind OkToDup bndr' [] body2 (zapSubstEnv se `setInScopeFromF` floats2) (mkBoringStop res_ty))})
                                              -- See Note [StaticEnv invariant] in SimplUtils
 
-  (\jh dup info cci k -> returnIfContDupable env (mkStrictArg dup info cci jh) $
+  (oneShot $ \jh dup info cci k -> returnIfContDupable env (mkStrictArg dup info cci jh) $
     -- See Note [Duplicating StrictArg]
     -- NB: sc_dup /= OkToDup; that is caught earlier by contIsDupable
     do { (floats1, cont') <- k
@@ -3364,7 +3367,7 @@ mkDupableCont env scont = runScont scont
                 , mkStrictArg OkToDup (info { ai_args = args'}) cci cont')})
 
   -- Duplicating ticks for now, not sure if this is good or not
-  (\jh t k -> returnIfContDupable env (mkTickIt t jh) $
+  (oneShot $ \jh t k -> returnIfContDupable env (mkTickIt t jh) $
     do  { (floats, cont') <- k
         ; return (floats, mkTickIt t cont') })
 

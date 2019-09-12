@@ -18,7 +18,7 @@ module SimplUtils (
         simplEnvForGHCi, updModeForStableUnfoldings, updModeForRules,
 
         -- The continuation type
-        SimplCont(..), DupFlag(..), StaticEnv, Scont(..),
+        DupFlag(..), StaticEnv, Scont(..),
         isSimplified, contIsStop,
         contIsDupable, contResultType, contHoleType,
         contIsTrivial, contArgs,
@@ -142,63 +142,6 @@ newtype Scont = Scont
     -> r
   }
 
-data SimplCont
-  = Stop                -- Stop[e] = e
-        OutType         -- Type of the <hole>
-        CallCtxt        -- Tells if there is something interesting about
-                        --          the context, and hence the inliner
-                        --          should be a bit keener (see interestingCallContext)
-                        -- Specifically:
-                        --     This is an argument of a function that has RULES
-                        --     Inlining the call might allow the rule to fire
-                        -- Never ValAppCxt (use ApplyToVal instead)
-                        -- or CaseCtxt (use Select instead)
-
-  | CastIt              -- (CastIt co K)[e] = K[ e `cast` co ]
-        OutCoercion             -- The coercion simplified
-                                -- Invariant: never an identity coercion
-        SimplCont
-
-  | ApplyToVal         -- (ApplyToVal arg K)[e] = K[ e arg ]
-      { sc_dup  :: DupFlag      -- See Note [DupFlag invariants]
-      , sc_arg  :: InExpr       -- The argument,
-      , sc_env  :: StaticEnv    -- see Note [StaticEnv invariant]
-      , sc_cont :: SimplCont }
-
-  | ApplyToTy          -- (ApplyToTy ty K)[e] = K[ e ty ]
-      { sc_arg_ty  :: OutType     -- Argument type
-      , sc_hole_ty :: OutType     -- Type of the function, presumably (forall a. blah)
-                                  -- See Note [The hole type in ApplyToTy]
-      , sc_cont    :: SimplCont }
-
-  | Select             -- (Select alts K)[e] = K[ case e of alts ]
-      { sc_dup  :: DupFlag        -- See Note [DupFlag invariants]
-      , sc_bndr :: InId           -- case binder
-      , sc_alts :: [InAlt]        -- Alternatives
-      , sc_env  :: StaticEnv      -- See Note [StaticEnv invariant]
-      , sc_cont :: SimplCont }
-
-  -- The two strict forms have no DupFlag, because we never duplicate them
-  | StrictBind          -- (StrictBind x xs b K)[e] = let x = e in K[\xs.b]
-                        --       or, equivalently,  = K[ (\x xs.b) e ]
-      { sc_dup   :: DupFlag        -- See Note [DupFlag invariants]
-      , sc_bndr  :: InId
-      , sc_bndrs :: [InBndr]
-      , sc_body  :: InExpr
-      , sc_env   :: StaticEnv      -- See Note [StaticEnv invariant]
-      , sc_cont  :: SimplCont }
-
-  | StrictArg           -- (StrictArg (f e1 ..en) K)[e] = K[ f e1 .. en e ]
-      { sc_dup  :: DupFlag     -- Always Simplified or OkToDup
-      , sc_fun  :: ArgInfo     -- Specifies f, e1..en, Whether f has rules, etc
-                               --     plus strictness flags for *further* args
-      , sc_cci  :: CallCtxt    -- Whether *this* argument position is interesting
-      , sc_cont :: SimplCont }
-
-  | TickIt              -- (TickIt t K)[e] = K[ tick t e ]
-        (Tickish Id)    -- Tick tickish <hole>
-        SimplCont
-
 type StaticEnv = SimplEnv       -- Just the static part is relevant
 
 data DupFlag = NoDup       -- Unsimplified, might be big
@@ -252,22 +195,22 @@ instance Outputable DupFlag where
 instance Outputable Scont where
   ppr (Scont{}) = text "scont"
 
-instance Outputable SimplCont where
-  ppr (Stop ty interesting) = text "Stop" <> brackets (ppr interesting) <+> ppr ty
-  ppr (CastIt co cont  )    = (text "CastIt" <+> pprOptCo co) $$ ppr cont
-  ppr (TickIt t cont)       = (text "TickIt" <+> ppr t) $$ ppr cont
-  ppr (ApplyToTy  { sc_arg_ty = ty, sc_cont = cont })
-    = (text "ApplyToTy" <+> pprParendType ty) $$ ppr cont
-  ppr (ApplyToVal { sc_arg = arg, sc_dup = dup, sc_cont = cont })
-    = (text "ApplyToVal" <+> ppr dup <+> pprParendExpr arg)
-                                        $$ ppr cont
-  ppr (StrictBind { sc_bndr = b, sc_cont = cont })
-    = (text "StrictBind" <+> ppr b) $$ ppr cont
-  ppr (StrictArg { sc_fun = ai, sc_cont = cont })
-    = (text "StrictArg" <+> ppr (ai_fun ai)) $$ ppr cont
-  ppr (Select { sc_dup = dup, sc_bndr = bndr, sc_alts = alts, sc_env = se, sc_cont = cont })
-    = (text "Select" <+> ppr dup <+> ppr bndr) $$
-       whenPprDebug (nest 2 $ vcat [ppr (seTvSubst se), ppr alts]) $$ ppr cont
+-- instance Outputable SimplCont where
+--   ppr (Stop ty interesting) = text "Stop" <> brackets (ppr interesting) <+> ppr ty
+--   ppr (CastIt co cont  )    = (text "CastIt" <+> pprOptCo co) $$ ppr cont
+--   ppr (TickIt t cont)       = (text "TickIt" <+> ppr t) $$ ppr cont
+--   ppr (ApplyToTy  { sc_arg_ty = ty, sc_cont = cont })
+--     = (text "ApplyToTy" <+> pprParendType ty) $$ ppr cont
+--   ppr (ApplyToVal { sc_arg = arg, sc_dup = dup, sc_cont = cont })
+--     = (text "ApplyToVal" <+> ppr dup <+> pprParendExpr arg)
+--                                         $$ ppr cont
+--   ppr (StrictBind { sc_bndr = b, sc_cont = cont })
+--     = (text "StrictBind" <+> ppr b) $$ ppr cont
+--   ppr (StrictArg { sc_fun = ai, sc_cont = cont })
+--     = (text "StrictArg" <+> ppr (ai_fun ai)) $$ ppr cont
+--   ppr (Select { sc_dup = dup, sc_bndr = bndr, sc_alts = alts, sc_env = se, sc_cont = cont })
+--     = (text "Select" <+> ppr dup <+> ppr bndr) $$
+--        whenPprDebug (nest 2 $ vcat [ppr (seTvSubst se), ppr alts]) $$ ppr cont
 
 
 {- Note [The hole type in ApplyToTy]

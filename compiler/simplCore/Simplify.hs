@@ -1452,33 +1452,44 @@ simplLam :: Scont -> SimplEnv -> [InId] -> InExpr
 simplLam cont env [] body
   = simplExprF env body cont
 
-simplLam (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont }) env (bndr:bndrs) body
-  = do { tick (BetaReduction bndr)
-       ; simplLam (toScont cont) (extendTvSubst env bndr arg_ty) bndrs body  }
+simplLam (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont }) env bs body =
+  case bs of
+    [] -> error "first"
+    (bndr:bndrs) ->
+      do { tick (BetaReduction bndr)
+         ; simplLam (toScont cont) (extendTvSubst env bndr arg_ty) bndrs body  }
 
-simplLam (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se , sc_cont = cont, sc_dup = dup }) env (bndr:bndrs) body
-  | isSimplified dup  -- Don't re-simplify if we've simplified it once
-                      -- See Note [Avoiding exponential behaviour]
-  = do  { tick (BetaReduction bndr)
-        ; (floats1, env') <- simplNonRecX env zapped_bndr arg
-        ; (floats2, expr') <- simplLam (toScont cont) env' bndrs body
-        ; return (floats1 `addFloats` floats2, expr') }
+simplLam (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se , sc_cont = cont, sc_dup = dup }) env bs  body =
+  case bs of
+    [] -> error "first"
+    (bndr:bndrs) ->
+      let zapped_bndr  -- See Note [Zap unfolding when beta-reducing]
+            | isId bndr = zapStableUnfolding bndr
+            | otherwise = bndr in
+      case isSimplified dup of  -- Don't re-simplify if we've simplified it once
+                                -- See Note [Avoiding exponential behaviour]
+        True ->
+          do  { tick (BetaReduction bndr)
+              ; (floats1, env') <- simplNonRecX env zapped_bndr arg
+              ; (floats2, expr') <- simplLam (toScont cont) env' bndrs body
+              ; return (floats1 `addFloats` floats2, expr') }
 
-  | otherwise
-  = do  { tick (BetaReduction bndr)
-        ; simplNonRecE env zapped_bndr (arg, arg_se) (bndrs, body) $ toScont cont }
-  where
-    zapped_bndr  -- See Note [Zap unfolding when beta-reducing]
-      | isId bndr = zapStableUnfolding bndr
-      | otherwise = bndr
+        False ->
+          do  { tick (BetaReduction bndr)
+              ; simplNonRecE env zapped_bndr (arg, arg_se) (bndrs, body) $ toScont cont }
 
       -- Discard a non-counting tick on a lambda.  This may change the
       -- cost attribution slightly (moving the allocation of the
       -- lambda elsewhere), but we don't care: optimisation changes
       -- cost attribution all the time.
-simplLam (fromScont -> TickIt tickish cont) env bndrs body
-  | not (tickishCounts tickish)
-  = simplLam (toScont cont) env bndrs body
+simplLam cont'@(fromScont -> TickIt tickish cont) env bndrs body =
+  case not (tickishCounts tickish) of
+    True -> simplLam (toScont cont) env bndrs body
+    False ->
+      do  { (env', bndrs') <- simplLamBndrs env bndrs
+          ; body' <- simplExpr env' body
+          ; new_lam <- mkLam env bndrs' body' cont'
+          ; rebuild env' new_lam cont' }
 
         -- Not enough args, so there are real lambdas left to put in the result
 simplLam cont env bndrs body

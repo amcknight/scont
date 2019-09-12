@@ -23,7 +23,7 @@ module SimplUtils (
         contIsDupable, contResultType, contHoleType,
         contIsTrivial, contArgs,
         countArgs,
-        mkBoringStop, mkRhsStop, mkLazyArgStop, contIsRhsOrArg,
+        mkBoringStop, mkRhsStop, mkLazyArgStop, contIsRhsOrArg, contIsSelect,
         interestingCallContext,
 
         mkStop, mkCastIt, mkApplyToVal, mkApplyToTy, mkSelect, mkStrictBind, mkStrictArg, mkTickIt,
@@ -34,8 +34,6 @@ module SimplUtils (
         argInfoExpr, argInfoAppArgs, pushSimplifiedArgs,
 
         abstractFloats,
-
-        toScont, fromScont,
 
         -- Utilities
         isExitJoinId
@@ -104,28 +102,6 @@ Key points:
   * A SimplCont describes a context that *does not* bind
     any variables.  E.g. \x. [] is not a SimplCont
 -}
-
-fromScont :: Scont -> SimplCont
-fromScont s =
-  runScont s
-    (Stop)
-    (const CastIt)
-    (const ApplyToVal)
-    (const ApplyToTy)
-    (const Select)
-    (const StrictBind)
-    (const StrictArg)
-    (const TickIt)
-
-toScont :: SimplCont -> Scont
-toScont (Stop m n) = mkStop m n
-toScont (CastIt m r) = mkCastIt m $ toScont r
-toScont (ApplyToVal m n o r) = mkApplyToVal m n o $ toScont r
-toScont (ApplyToTy m n r) = mkApplyToTy m n $ toScont r
-toScont (Select m n o p r) = mkSelect m n o p $ toScont r
-toScont (StrictBind m n o p q r) = mkStrictBind m n o p q $ toScont r
-toScont (StrictArg m n o r) = mkStrictArg m n o $ toScont r
-toScont (TickIt m r) = mkTickIt m $ toScont r
 
 mkStop :: OutType -> CallCtxt -> Scont
 mkStop m n = Scont $ \f _ _ _ _ _ _ _ -> f m n
@@ -462,6 +438,19 @@ contIsStop s =
     (\_ _ _ _ _     -> False)  -- ApplyToVal
     (\_ _ _ _       -> False)  -- ApplyToTy
     (\_ _ _ _ _ _   -> False)  -- Select
+    (\_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (\_ _ _ _ _     -> False)  -- StrictArg
+    (\_ _ _         -> False)  -- TickIt
+
+-------------------
+contIsSelect :: Scont -> Bool
+contIsSelect s =
+  runScont s
+    (\_ _           -> False)   -- Stop
+    (\_ _ _         -> False)  -- CastIt
+    (\_ _ _ _ _     -> False)  -- ApplyToVal
+    (\_ _ _ _       -> False)  -- ApplyToTy
+    (\_ _ _ _ _ _   -> True)  -- Select
     (\_ _ _ _ _ _ _ -> False)  -- StrictBind
     (\_ _ _ _ _     -> False)  -- StrictArg
     (\_ _ _         -> False)  -- TickIt

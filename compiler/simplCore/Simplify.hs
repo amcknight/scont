@@ -1095,7 +1095,8 @@ simplTick env tickish expr cont
 
   -- Push tick inside if the context looks like this will allow us to
   -- do a case-of-case - see Note [case-of-scc-of-case]
-  | Select {} <- fromScont cont, Just expr' <- push_tick_inside
+  | contIsSelect cont
+  , Just expr' <- push_tick_inside
   = simplExprF env expr' cont
 
   -- We don't want to move the tick, but we might still want to allow

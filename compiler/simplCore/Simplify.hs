@@ -926,7 +926,7 @@ simplExprF1 env (App fun arg) cont
 
 simplExprF1 env expr@(Lam {}) cont
   = {-#SCC "simplExprF1-Lam" #-}
-    simplLam env zapped_bndrs body cont
+    simplLam cont env zapped_bndrs body
         -- The main issue here is under-saturated lambdas
         --   (\x1. \x2. e) arg1
         -- Here x1 might have "occurs-once" occ-info, because occ-info
@@ -1267,7 +1267,7 @@ rebuild env expr cont = go cont expr
          do { (floats1, env') <- simplNonRecX (se `setInScopeFromE` env) b expr
                                 -- expr satisfies let/app since it started life
                                 -- in a call to simplNonRecE
-            ; (floats2, expr') <- simplLam env' bs body cont
+            ; (floats2, expr') <- simplLam cont env' bs body
             ; return (floats1 `addFloats` floats2, expr') }
 
       )
@@ -1446,23 +1446,22 @@ simplArg env dup_flag arg_env arg
 ************************************************************************
 -}
 
-simplLam :: SimplEnv -> [InId] -> InExpr -> Scont
+simplLam :: Scont -> SimplEnv -> [InId] -> InExpr
          -> SimplM (SimplFloats, OutExpr)
 
-simplLam env [] body cont
+simplLam cont env [] body
   = simplExprF env body cont
 
-simplLam env (bndr:bndrs) body (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont })
+simplLam (fromScont -> ApplyToTy { sc_arg_ty = arg_ty, sc_cont = cont }) env (bndr:bndrs) body
   = do { tick (BetaReduction bndr)
-       ; simplLam (extendTvSubst env bndr arg_ty) bndrs body $ toScont cont }
+       ; simplLam (toScont cont) (extendTvSubst env bndr arg_ty) bndrs body  }
 
-simplLam env (bndr:bndrs) body (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se
-                                           , sc_cont = cont, sc_dup = dup })
+simplLam (fromScont -> ApplyToVal { sc_arg = arg, sc_env = arg_se , sc_cont = cont, sc_dup = dup }) env (bndr:bndrs) body
   | isSimplified dup  -- Don't re-simplify if we've simplified it once
                       -- See Note [Avoiding exponential behaviour]
   = do  { tick (BetaReduction bndr)
         ; (floats1, env') <- simplNonRecX env zapped_bndr arg
-        ; (floats2, expr') <- simplLam env' bndrs body $ toScont cont
+        ; (floats2, expr') <- simplLam (toScont cont) env' bndrs body
         ; return (floats1 `addFloats` floats2, expr') }
 
   | otherwise
@@ -1477,12 +1476,12 @@ simplLam env (bndr:bndrs) body (fromScont -> ApplyToVal { sc_arg = arg, sc_env =
       -- cost attribution slightly (moving the allocation of the
       -- lambda elsewhere), but we don't care: optimisation changes
       -- cost attribution all the time.
-simplLam env bndrs body (fromScont -> TickIt tickish cont)
+simplLam (fromScont -> TickIt tickish cont) env bndrs body
   | not (tickishCounts tickish)
-  = simplLam env bndrs body $ toScont cont
+  = simplLam (toScont cont) env bndrs body
 
         -- Not enough args, so there are real lambdas left to put in the result
-simplLam env bndrs body cont
+simplLam cont env bndrs body
   = do  { (env', bndrs') <- simplLamBndrs env bndrs
         ; body' <- simplExpr env' body
         ; new_lam <- mkLam env bndrs' body' cont
@@ -1546,7 +1545,7 @@ simplNonRecE env bndr (rhs, rhs_se) (bndrs, body) cont
   , Just env' <- preInlineUnconditionally env NotTopLevel bndr rhs rhs_se
   = do { tick (PreInlineUnconditionally bndr)
        ; -- pprTrace "preInlineUncond" (ppr bndr <+> ppr rhs) $
-         simplLam env' bndrs body cont }
+         simplLam cont env' bndrs body }
 
   -- Deal with strict bindings
   | isStrictId bndr          -- Includes coercions
@@ -1560,7 +1559,7 @@ simplNonRecE env bndr (rhs, rhs_se) (bndrs, body) cont
     do { (env1, bndr1) <- simplNonRecBndr env bndr
        ; (env2, bndr2) <- addBndrRules env1 bndr bndr1 Nothing
        ; (floats1, env3) <- simplLazyBind env2 NotTopLevel NonRecursive bndr bndr2 rhs rhs_se
-       ; (floats2, expr') <- simplLam env3 bndrs body cont
+       ; (floats2, expr') <- simplLam cont env3 bndrs body
        ; return (floats1 `addFloats` floats2, expr') }
 
 ------------------
@@ -3244,7 +3243,7 @@ mkDupableCont env scont = runScont scont
     -- See Note [Duplicating StrictBind]
        do { let sb_env = se `setInScopeFromE` env
            ; (sb_env1, bndr') <- simplBinder sb_env bndr
-           ; (floats1, join_inner) <- simplLam sb_env1 bndrs body cont
+           ; (floats1, join_inner) <- simplLam cont sb_env1 bndrs body
               -- No need to use mkDupableCont before simplLam; we
               -- use cont once here, and then share the result if necessary
 

@@ -152,7 +152,6 @@ mkTickIt :: Tickish Id -> Scont -> Scont
 mkTickIt m r = Scont $ \a b c d e f g h -> h r m         $ runScont r a b c d e f g h
 
 
-
 newtype Scont = Scont
   { runScont
     :: forall r

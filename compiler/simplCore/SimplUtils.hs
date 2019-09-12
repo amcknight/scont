@@ -531,7 +531,6 @@ countArgs s =
     (\_ _ _ _ _     -> 0)  -- StrictArg
     (\_ _ _         -> 0)  -- TickIt
 
--- TODO(sandy): get rid of the toSconts
 contArgs :: Scont -> (Bool, [ArgSummary], Scont)
 -- Summarises value args, discards type args and coercions
 -- The returned continuation of the call is only used to

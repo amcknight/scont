@@ -76,7 +76,7 @@ module TcRnTypes(
         isCNonCanonical, isWantedCt, isDerivedCt,
         isGivenCt, isHoleCt, isOutOfScopeCt, isExprHoleCt, isTypeHoleCt,
         isUserTypeErrorCt, getUserTypeErrorMsg,
-        ctEvidence, ctLoc, setCtLoc, ctPred, ctFlavour, ctEqRel, ctOrigin,
+        ctEvidence, ctLoc, setCtLoc, ctPred, ctCanonicalPred, ctFlavour, ctEqRel, ctOrigin,
         ctEvId, mkTcEqPredLikeEv,
         mkNonCanonical, mkNonCanonicalCt, mkGivens,
         mkIrredCt, mkInsolubleCt,
@@ -204,7 +204,7 @@ import Data.List ( sort )
 import Data.Map ( Map )
 import Data.Dynamic  ( Dynamic )
 import Data.Typeable ( TypeRep )
-import Data.Maybe    ( mapMaybe )
+import Data.Maybe    ( mapMaybe, fromMaybe )
 import GHCi.Message
 import GHCi.RemoteTypes
 
@@ -1894,6 +1894,11 @@ ctPred :: Ct -> PredType
 -- See Note [Ct/evidence invariant]
 ctPred ct = ctEvPred (ctEvidence ct)
 
+ctCanonicalPred :: Ct -> PredType
+ctCanonicalPred ct =
+  let ev = ctEvidence ct
+   in maybe (ctEvPred ev) ctEvPred $ ctl_canonical $ ctev_loc ev
+
 ctEvId :: Ct -> EvVar
 -- The evidence Id for this Ct
 ctEvId ct = ctEvEvId (ctEvidence ct)
@@ -3301,7 +3306,9 @@ type will evolve...
 data CtLoc = CtLoc { ctl_origin :: CtOrigin
                    , ctl_env    :: TcLclEnv
                    , ctl_t_or_k :: Maybe TypeOrKind  -- OK if we're not sure
-                   , ctl_depth  :: !SubGoalDepth }
+                   , ctl_depth  :: !SubGoalDepth
+                   , ctl_canonical :: Maybe CtEvidence
+                   }
 
   -- The TcLclEnv includes particularly
   --    source location:  tcl_loc   :: RealSrcSpan
@@ -3324,7 +3331,9 @@ mkGivenLoc tclvl skol_info env
   = CtLoc { ctl_origin = GivenOrigin skol_info
           , ctl_env    = env { tcl_tclvl = tclvl }
           , ctl_t_or_k = Nothing    -- this only matters for error msgs
-          , ctl_depth  = initialSubGoalDepth }
+          , ctl_depth  = initialSubGoalDepth
+          , ctl_canonical = Nothing
+          }
 
 ctLocEnv :: CtLoc -> TcLclEnv
 ctLocEnv = ctl_env

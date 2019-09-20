@@ -1070,7 +1070,9 @@ getCtLocM origin t_or_k
        ; return (CtLoc { ctl_origin = origin
                        , ctl_env    = env
                        , ctl_t_or_k = t_or_k
-                       , ctl_depth  = initialSubGoalDepth }) }
+                       , ctl_depth  = initialSubGoalDepth
+                       , ctl_canonical = Nothing
+                       }) }
 
 setCtLocM :: CtLoc -> TcM a -> TcM a
 -- Set the SrcSpan and error context from the CtLoc

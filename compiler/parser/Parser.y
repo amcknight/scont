@@ -523,6 +523,7 @@ are the most common patterns, rewritten as regular expressions for clarity:
  '{-# ANN'                { L _ (ITann_prag _) }
  '{-# MINIMAL'            { L _ (ITminimal_prag _) }
  '{-# CTYPE'              { L _ (ITctype _) }
+ '{-# CANONICAL'          { L _ (ITcanonical_prag _) }
  '{-# OVERLAPPING'        { L _ (IToverlapping_prag _) }
  '{-# OVERLAPPABLE'       { L _ (IToverlappable_prag _) }
  '{-# OVERLAPS'           { L _ (IToverlaps_prag _) }
@@ -1084,7 +1085,7 @@ cl_decl :: { LTyClDecl GhcPs }
 --
 ty_decl :: { LTyClDecl GhcPs }
            -- ordinary type synonyms
-        : 'type' type '=' ktypedoc
+        : 'type' canonical_pragma type '=' ktypedoc
                 -- Note ktypedoc, not sigtype, on the right of '='
                 -- We allow an explicit for-all but we don't insert one
                 -- in   type Foo a = (b,b)
@@ -1092,8 +1093,8 @@ ty_decl :: { LTyClDecl GhcPs }
                 --
                 -- Note the use of type for the head; this allows
                 -- infix type constructors to be declared
-                {% amms (mkTySynonym (comb2 $1 $4) $2 $4)
-                        [mj AnnType $1,mj AnnEqual $3] }
+                {% amms (mkTySynonym (comb2 $1 $5) $3 $5 $2)
+                        [mj AnnType $1,mj AnnEqual $4] }
 
            -- type family declarations
         | 'type' 'family' type opt_tyfam_kind_sig opt_injective_info
@@ -1166,6 +1167,10 @@ inst_decl :: { LInstDecl GhcPs }
                                    (fmap reverse $7))
                     ((fst $ unLoc $1):mj AnnInstance $2
                        :(fst $ unLoc $4)++(fst $ unLoc $5)++(fst $ unLoc $6)) }
+
+canonical_pragma :: { Bool }
+  : '{-# CANONICAL'    '#-}' { True  }
+  | {- empty -}              { False }
 
 overlap_pragma :: { Maybe (Located OverlapMode) }
   : '{-# OVERLAPPABLE'    '#-}' {% ajs (Just (sLL $1 $> (Overlappable (getOVERLAPPABLE_PRAGs $1))))

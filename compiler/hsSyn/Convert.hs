@@ -193,6 +193,7 @@ cvtDec (TySynD tc tvs rhs)
         ; returnJustL $ TyClD noExtField $
           SynDecl { tcdSExt = noExtField, tcdLName = tc', tcdTyVars = tvs'
                   , tcdFixity = Prefix
+                  , tcdIsCanonical = False
                   , tcdRhs = rhs' } }
 
 cvtDec (DataD ctxt tc tvs ksig constrs derivs)
@@ -253,6 +254,7 @@ cvtDec (ClassD ctxt cl tvs fds decs)
                     , tcdFixity = Prefix
                     , tcdFDs = fds', tcdSigs = Hs.mkClassOpSigs sigs'
                     , tcdMeths = binds'
+                    , tcdIsCanonical = False
                     , tcdATs = fams', tcdATDefs = at_defs', tcdDocs = [] }
                               -- no docs in TH ^^
         }

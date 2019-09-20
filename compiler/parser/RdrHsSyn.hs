@@ -185,7 +185,9 @@ mkClassDecl loc (dL->L _ (mcxt, tycl_hdr)) fds where_cls
                                    , tcdSigs = mkClassOpSigs sigs
                                    , tcdMeths = binds
                                    , tcdATs = ats, tcdATDefs = at_defs
-                                   , tcdDocs  = docs })) }
+                                   , tcdDocs  = docs
+                                   , tcdIsCanonical = False
+                                   })) }
 
 mkTyData :: SrcSpan
          -> NewOrData
@@ -228,8 +230,9 @@ mkDataDefn new_or_data cType mcxt ksig data_cons maybe_deriv
 mkTySynonym :: SrcSpan
             -> LHsType GhcPs  -- LHS
             -> LHsType GhcPs  -- RHS
+            -> Bool           -- ^ is canonical
             -> P (LTyClDecl GhcPs)
-mkTySynonym loc lhs rhs
+mkTySynonym loc lhs rhs canonical
   = do { (tc, tparams, fixity, ann) <- checkTyClHdr False lhs
        ; addAnnsAt loc ann -- Add any API Annotations to the top SrcSpan
        ; (tyvars, anns) <- checkTyVars (text "type") equalsDots tc tparams
@@ -237,7 +240,9 @@ mkTySynonym loc lhs rhs
        ; return (cL loc (SynDecl { tcdSExt = noExtField
                                  , tcdLName = tc, tcdTyVars = tyvars
                                  , tcdFixity = fixity
-                                 , tcdRhs = rhs })) }
+                                 , tcdRhs = rhs
+                                 , tcdIsCanonical = canonical
+                                 })) }
 
 mkTyFamInstEqn :: Maybe [LHsTyVarBndr GhcPs]
                -> LHsType GhcPs

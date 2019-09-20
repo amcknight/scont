@@ -37,6 +37,7 @@ import DynFlags( DynFlags )
 import NameSet
 import RdrName
 import HsTypes( HsIPName(..) )
+import HsDumpAst
 
 import Pair
 import Util
@@ -47,6 +48,7 @@ import Data.Maybe ( isJust )
 import Data.List  ( zip4 )
 import BasicTypes
 
+import Data.Bool (bool)
 import Data.Bifunctor ( bimap )
 
 {-
@@ -207,9 +209,18 @@ canClass ev cls tys pend_sc
     ASSERT2( ctEvRole ev == Nominal, ppr ev $$ ppr cls $$ ppr tys )
     do { (xis, cos, _kind_co) <- flattenArgsNom ev cls_tc tys
        ; MASSERT( isTcReflCo _kind_co )
+       ; let is_canonical =
+               -- TODO(sandy): so the problem here is that is_canonical is always false, because that's the result we set in `mkAlgTyCon` for Show and for some reason it's propagating its way here instead of Foo's tcIsCanonical. /shrug
+               case splitTyConApp_maybe $ ctev_pred ev of
+                 Just (tc, _) -> tcIsCanonical tc
+                 _ -> False
+       ; pprPanic "what is going on here?" $ vcat [ppr $ showAstData BlankSrcSpan ev, ppr is_canonical, ppr cls, ppr tys]
        ; let co = mkTcTyConAppCo Nominal cls_tc cos
              xi = mkClassPred cls xis
-             mk_ct new_ev = CDictCan { cc_ev = new_ev
+             mk_ct new_ev = CDictCan { cc_ev = bool id
+                                                    (setCanonicalEv ev)
+                                                    (tcIsCanonical $ classTyCon cls)
+                                                  $ new_ev
                                      , cc_tyargs = xis
                                      , cc_class = cls
                                      , cc_pend_sc = pend_sc }
@@ -219,6 +230,16 @@ canClass ev cls tys pend_sc
        ; return (fmap mk_ct mb) }
   where
     cls_tc = classTyCon cls
+
+setCanonicalEv
+    :: CtEvidence  -- ^ canonical
+    -> CtEvidence  -- ^ child
+    -> CtEvidence
+setCanonicalEv ev ccev =
+  ccev
+    { ctev_loc = (ctev_loc ccev)
+      { ctl_canonical = Just ev
+      } }
 
 {- Note [The superclass story]
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~

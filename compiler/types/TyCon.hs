@@ -23,6 +23,7 @@ module TyCon(
         mkAnonTyConBinder, mkAnonTyConBinders,
         tyConBinderArgFlag, tyConBndrVisArgFlag, isNamedTyConBinder,
         isVisibleTyConBinder, isInvisibleTyConBinder,
+        tcIsCanonical,
 
         -- ** Field labels
         tyConFieldLabels, lookupTyConFieldLabel,
@@ -739,6 +740,7 @@ data TyCon
               -- Note that it does /not/ scope over the data
               -- constructors.
 
+        tcIsCanonical :: Bool,
         tcRoles      :: [Role],  -- ^ The role for each type variable
                                  -- This list has length = tyConArity
                                  -- See also Note [TyCon Role signatures]
@@ -788,6 +790,7 @@ data TyCon
         tyConArity   :: Arity,            -- ^ Arity
              -- tyConTyVars scope over: synTcRhs
 
+        tcIsCanonical :: Bool,
         tcRoles      :: [Role],  -- ^ The role for each type variable
                                  -- This list has length = tyConArity
                                  -- See also Note [TyCon Role signatures]
@@ -1585,6 +1588,7 @@ mkAlgTyCon name binders res_kind roles cType stupid rhs parent gadt_syn
         tyConKind        = mkTyConKind binders res_kind,
         tyConArity       = length binders,
         tyConTyVars      = binderVars binders,
+        tcIsCanonical    = False,
         tcRoles          = roles,
         tyConCType       = cType,
         algTcStupidTheta = stupid,
@@ -1620,6 +1624,7 @@ mkTupleTyCon name binders res_kind arity con sort parent
         tyConResKind     = res_kind,
         tyConKind        = mkTyConKind binders res_kind,
         tyConArity       = arity,
+        tcIsCanonical    = False,
         tcRoles          = replicate arity Representational,
         tyConCType       = Nothing,
         algTcGadtSyntax  = False,
@@ -1647,6 +1652,7 @@ mkSumTyCon name binders res_kind arity tyvars cons parent
         tyConResKind     = res_kind,
         tyConKind        = mkTyConKind binders res_kind,
         tyConArity       = arity,
+        tcIsCanonical = False,
         tcRoles          = replicate arity Representational,
         tyConCType       = Nothing,
         algTcGadtSyntax  = False,
@@ -1738,6 +1744,7 @@ mkSynonymTyCon name binders res_kind roles rhs is_tau is_fam_free
         tyConKind    = mkTyConKind binders res_kind,
         tyConArity   = length binders,
         tyConTyVars  = binderVars binders,
+        tcIsCanonical = False,
         tcRoles      = roles,
         synTcRhs     = rhs,
         synIsTau     = is_tau,

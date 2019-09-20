@@ -1058,7 +1058,8 @@ getInitialKind cusk (FamDecl { tcdFam = decl })
 
 getInitialKind cusk (SynDecl { tcdLName = dL->L _ name
                              , tcdTyVars = ktvs
-                             , tcdRhs = rhs })
+                             , tcdRhs = rhs
+                             , tcdIsCanonical = is_can})
   = do  { cusks_enabled <- xoptM LangExt.CUSKs
         ; tycon <- kcLHsQTyVars name TypeSynonymFlavour cusk ktvs $
                    case kind_annotation cusks_enabled rhs of
@@ -1600,11 +1601,13 @@ tcTyClDecl1 parent _roles_info (FamDecl { tcdFam = fd })
   -- "type" synonym declaration
 tcTyClDecl1 _parent roles_info
             (SynDecl { tcdLName = (dL->L _ tc_name)
-                     , tcdRhs   = rhs })
+                     , tcdRhs   = rhs
+                     , tcdIsCanonical = is_can})
   = ASSERT( isNothing _parent )
     fmap noDerivInfos $
-    bindTyClTyVars tc_name $ \ binders res_kind ->
-    tcTySynRhs roles_info tc_name binders res_kind rhs
+    bindTyClTyVars tc_name $ \ binders res_kind -> do
+      z <- tcTySynRhs roles_info tc_name binders res_kind rhs
+      pure $ z { tcIsCanonical = is_can }
 
   -- "data/newtype" declaration
 tcTyClDecl1 _parent roles_info

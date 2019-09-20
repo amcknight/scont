@@ -508,7 +508,9 @@ data TyClDecl pass
                                                   -- associated type these
                                                   -- include outer binders
             , tcdFixity :: LexicalFixity    -- ^ Fixity used in the declaration
-            , tcdRhs    :: LHsType pass }         -- ^ RHS of type declaration
+            , tcdRhs    :: LHsType pass
+            , tcdIsCanonical :: Bool
+            }         -- ^ RHS of type declaration
 
   | -- | @data@ declaration
     --
@@ -536,7 +538,8 @@ data TyClDecl pass
                 tcdMeths   :: LHsBinds pass,            -- ^ Default methods
                 tcdATs     :: [LFamilyDecl pass],       -- ^ Associated types;
                 tcdATDefs  :: [LTyFamDefltDecl pass],   -- ^ Associated type defaults
-                tcdDocs    :: [LDocDecl]                -- ^ Haddock docs
+                tcdDocs    :: [LDocDecl],               -- ^ Haddock docs
+                tcdIsCanonical :: Bool
     }
         -- ^ - 'ApiAnnotation.AnnKeywordId' : 'ApiAnnotation.AnnClass',
         --           'ApiAnnotation.AnnWhere','ApiAnnotation.AnnOpen',

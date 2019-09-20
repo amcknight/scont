@@ -740,7 +740,7 @@ mkGivenErrorReporter ctxt cts
        ; reportWarning (Reason Opt_WarnInaccessibleCode) err }
   where
     (ct : _ )  = cts    -- Never empty
-    (ty1, ty2) = getEqPredTys (ctPred ct)
+    (ty1, ty2) = getEqPredTys (ctCanonicalPred ct)
 
 ignoreErrorReporter :: Reporter
 -- Discard Given errors that don't come from
@@ -973,12 +973,12 @@ pprWithArising []
 pprWithArising (ct:cts)
   | null cts
   = (loc, addArising (ctLocOrigin loc)
-                     (pprTheta [ctPred ct]))
+                     (pprTheta [ctCanonicalPred ct]))
   | otherwise
   = (loc, vcat (map ppr_one (ct:cts)))
   where
     loc = ctLoc ct
-    ppr_one ct' = hang (parens (pprType (ctPred ct')))
+    ppr_one ct' = hang (parens (pprType (ctCanonicalPred ct')))
                      2 (pprCtLoc (ctLoc ct'))
 
 mkErrorMsgFromCt :: ReportErrCtxt -> Ct -> Report -> TcM ErrMsg
@@ -1090,7 +1090,7 @@ mkIrredErr :: ReportErrCtxt -> [Ct] -> TcM ErrMsg
 mkIrredErr ctxt cts
   = do { (ctxt, binds_msg, ct1) <- relevantBindings True ctxt ct1
        ; let orig = ctOrigin ct1
-             msg  = couldNotDeduce (getUserGivens ctxt) (map ctPred cts, orig)
+             msg  = couldNotDeduce (getUserGivens ctxt) (map ctCanonicalPred cts, orig)
        ; mkErrorMsgFromCt ctxt ct1 $
             important msg `mappend` relevant_bindings binds_msg }
   where
@@ -2400,13 +2400,13 @@ mkDictErr ctxt cts
                 -- Note [Flattening in error message generation]
       = (ct, lookupInstEnv True inst_envs clas (flattenTys emptyInScopeSet tys))
       where
-        (clas, tys) = getClassPredTys (ctPred ct)
+        (clas, tys) = getClassPredTys (ctCanonicalPred ct)
 
 
     -- When simplifying [W] Ord (Set a), we need
     --    [W] Eq a, [W] Ord a
     -- but we really only want to report the latter
-    elim_superclasses cts = mkMinimalBySCs ctPred cts
+    elim_superclasses cts = mkMinimalBySCs ctCanonicalPred cts
 
 mk_dict_err :: ReportErrCtxt -> (Ct, ClsInstLookupResult)
             -> TcM (ReportErrCtxt, SDoc)
@@ -2425,7 +2425,7 @@ mk_dict_err ctxt@(CEC {cec_encl = implics}) (ct, (matches, unifiers, unsafe_over
   = return (ctxt, safe_haskell_msg)
   where
     orig          = ctOrigin ct
-    pred          = ctPred ct
+    pred          = ctCanonicalPred ct
     (clas, tys)   = getClassPredTys pred
     ispecs        = [ispec | (ispec, _) <- matches]
     unsafe_ispecs = [ispec | (ispec, _) <- unsafe_overlapped]

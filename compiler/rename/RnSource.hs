@@ -1503,7 +1503,7 @@ rnTyClDecl (FamDecl { tcdFam = decl })
        ; return (FamDecl noExtField decl', fvs) }
 
 rnTyClDecl (SynDecl { tcdLName = tycon, tcdTyVars = tyvars,
-                      tcdFixity = fixity, tcdRhs = rhs })
+                      tcdFixity = fixity, tcdRhs = rhs, tcdIsCanonical = is_can })
   = do { tycon' <- lookupLocatedTopBndrRn tycon
        ; let kvs = extractHsTyRdrTyVarsKindVars rhs
              doc = TySynCtx tycon
@@ -1512,6 +1512,7 @@ rnTyClDecl (SynDecl { tcdLName = tycon, tcdTyVars = tyvars,
     do { (rhs', fvs) <- rnTySyn doc rhs
        ; return (SynDecl { tcdLName = tycon', tcdTyVars = tyvars'
                          , tcdFixity = fixity
+                         , tcdIsCanonical = is_can
                          , tcdRhs = rhs', tcdSExt = fvs }, fvs) } }
 
 -- "data", "newtype" declarations
@@ -1544,7 +1545,7 @@ rnTyClDecl (ClassDecl { tcdCtxt = context, tcdLName = lcls,
                         tcdTyVars = tyvars, tcdFixity = fixity,
                         tcdFDs = fds, tcdSigs = sigs,
                         tcdMeths = mbinds, tcdATs = ats, tcdATDefs = at_defs,
-                        tcdDocs = docs})
+                        tcdDocs = docs, tcdIsCanonical = iscan})
   = do  { lcls' <- lookupLocatedTopBndrRn lcls
         ; let cls' = unLoc lcls'
               kvs = []  -- No scoped kind vars except those in
@@ -1599,7 +1600,7 @@ rnTyClDecl (ClassDecl { tcdCtxt = context, tcdLName = lcls,
         ; return (ClassDecl { tcdCtxt = context', tcdLName = lcls',
                               tcdTyVars = tyvars', tcdFixity = fixity,
                               tcdFDs = fds', tcdSigs = sigs',
-                              tcdMeths = mbinds', tcdATs = ats', tcdATDefs = at_defs',
+                              tcdMeths = mbinds', tcdATs = ats', tcdATDefs = at_defs', tcdIsCanonical = iscan,
                               tcdDocs = docs', tcdCExt = all_fvs },
                   all_fvs ) }
   where

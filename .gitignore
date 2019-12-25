@@ -31,7 +31,6 @@ Thumbs.db
 *.dyn_o
 *.dyn_hi
 __pycache__
-.mypy_cache
 *.SYMDEF*
 
 log
@@ -51,10 +50,6 @@ stage0
 stage1
 stage2
 _build
-*/generated/
-*/ghc-stage1
-.shake.*
-.hadrian_ghci
 
 # -----------------------------------------------------------------------------
 # Ignore any overlapped darcs repos and back up files
@@ -73,6 +68,7 @@ _darcs/
 /driver/ghc/dist/
 /driver/haddock/dist/
 /driver/ghci/dist/
+/driver/split/dist/
 /includes/dist-*/
 /libffi/dist-install/
 /libraries/*/dist-boot/
@@ -127,7 +123,6 @@ _darcs/
 /settings
 /ghc.spec
 /ghc/ghc-bin.cabal
-/includes/dist/
 /includes/ghcautoconf.h
 /includes/ghcplatform.h
 /includes/ghcversion.h
@@ -146,6 +141,7 @@ _darcs/
 /libraries/frames.html
 /libraries/ghc-boot/GNUmakefile
 /libraries/ghc-boot/ghc-boot.cabal
+/libraries/ghc-boot/ghc.mk
 /libraries/ghc-boot-th/GNUmakefile
 /libraries/ghc-boot-th/ghc-boot-th.cabal
 /libraries/ghc-boot-th/ghc.mk
@@ -157,13 +153,11 @@ _darcs/
 /libraries/hslogo-16.png
 /libraries/index-frames.html
 /libraries/index.html
-/libraries/libiserv/libiserv.cabal
 /libraries/minus.gif
 /libraries/ocean.css
 /libraries/plus.gif
 /libraries/synopsis.png
 /libraries/stamp/
-/libraries/template-haskell/template-haskell.cabal
 /linter.log
 /mk/are-validating.mk
 /mk/build.mk
@@ -184,9 +178,6 @@ _darcs/
 /testsuite_summary*.txt
 /testsuite*.xml
 /testlog*
-/utils/iserv/iserv.cabal
-/utils/iserv-proxy/iserv-proxy.cabal
-/utils/remote-iserv/remote-iserv.cabal
 /utils/mkUserGuidePart/mkUserGuidePart.cabal
 /utils/runghc/runghc.cabal
 /utils/gen-dll/gen-dll.cabal
@@ -195,7 +186,6 @@ utils/unlit/fs.*
 rts/fs.*
 libraries/base/include/fs.h
 libraries/base/cbits/fs.c
-missing-win32-tarballs
 
 /extra-gcc-opts
 /sdistprep
@@ -215,21 +205,7 @@ GIT_COMMIT_ID
 # Should be equal to testdir_suffix from testsuite/driver/testlib.py.
 *.run
 
-# -----------------------------------------------------------------------------
-# Output of ghc-in-ghci
-
-/.ghci-objects/
-
-# -----------------------------------------------------------------------------
-# ghc.nix
-ghc.nix/
-
-# gdb
-.gdb_history
-.gdbinit
-
-# Tooling - direnv
-.envrc 
-
-# Tooling - vscode
-.vscode
+libraries
+utils
+hadrian
+testsuite

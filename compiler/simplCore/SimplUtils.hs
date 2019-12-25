@@ -5,6 +5,7 @@
 -}
 
 {-# LANGUAGE CPP #-}
+{-# LANGUAGE RankNTypes #-}
 
 module SimplUtils (
         -- Rebuilding
@@ -17,13 +18,15 @@ module SimplUtils (
         simplEnvForGHCi, updModeForStableUnfoldings, updModeForRules,
 
         -- The continuation type
-        SimplCont(..), DupFlag(..), StaticEnv,
+        DupFlag(..), StaticEnv, Scont(..),
         isSimplified, contIsStop,
         contIsDupable, contResultType, contHoleType,
         contIsTrivial, contArgs,
         countArgs,
-        mkBoringStop, mkRhsStop, mkLazyArgStop, contIsRhsOrArg,
+        mkBoringStop, mkRhsStop, mkLazyArgStop, contIsRhsOrArg, contIsSelect,
         interestingCallContext,
+
+        mkStop, mkCastIt, mkApplyToVal, mkApplyToTy, mkSelect, mkStrictBind, mkStrictArg, mkTickIt,
 
         -- ArgInfo
         ArgInfo(..), ArgSpec(..), mkArgInfo,
@@ -71,6 +74,7 @@ import FastString       ( fsLit )
 
 import Control.Monad    ( when )
 import Data.List        ( sortBy )
+import GHC.Magic        ( oneShot )
 
 {-
 ************************************************************************
@@ -100,62 +104,44 @@ Key points:
     any variables.  E.g. \x. [] is not a SimplCont
 -}
 
-data SimplCont
-  = Stop                -- Stop[e] = e
-        OutType         -- Type of the <hole>
-        CallCtxt        -- Tells if there is something interesting about
-                        --          the context, and hence the inliner
-                        --          should be a bit keener (see interestingCallContext)
-                        -- Specifically:
-                        --     This is an argument of a function that has RULES
-                        --     Inlining the call might allow the rule to fire
-                        -- Never ValAppCxt (use ApplyToVal instead)
-                        -- or CaseCtxt (use Select instead)
+mkStop :: OutType -> CallCtxt -> Scont
+mkStop m n = Scont $ oneShot $ \f _ _ _ _ _ _ _ -> f m n
 
-  | CastIt              -- (CastIt co K)[e] = K[ e `cast` co ]
-        OutCoercion             -- The coercion simplified
-                                -- Invariant: never an identity coercion
-        SimplCont
+mkCastIt :: OutCoercion -> Scont -> Scont
+mkCastIt m r = Scont $ oneShot $ \a b c d e f g h -> b r m         $ runScont r a b c d e f g h
 
-  | ApplyToVal         -- (ApplyToVal arg K)[e] = K[ e arg ]
-      { sc_dup  :: DupFlag      -- See Note [DupFlag invariants]
-      , sc_arg  :: InExpr       -- The argument,
-      , sc_env  :: StaticEnv    -- see Note [StaticEnv invariant]
-      , sc_cont :: SimplCont }
+mkApplyToVal :: DupFlag -> InExpr -> StaticEnv -> Scont -> Scont
+mkApplyToVal m n o r = Scont $ oneShot $ \a b c d e f g h -> c r m n o     $ runScont r a b c d e f g h
 
-  | ApplyToTy          -- (ApplyToTy ty K)[e] = K[ e ty ]
-      { sc_arg_ty  :: OutType     -- Argument type
-      , sc_hole_ty :: OutType     -- Type of the function, presumably (forall a. blah)
-                                  -- See Note [The hole type in ApplyToTy]
-      , sc_cont    :: SimplCont }
+mkApplyToTy :: OutType -> OutType -> Scont -> Scont
+mkApplyToTy m n r = Scont $ oneShot $ \a b c d e f g h -> d r m n       $ runScont r a b c d e f g h
 
-  | Select             -- (Select alts K)[e] = K[ case e of alts ]
-      { sc_dup  :: DupFlag        -- See Note [DupFlag invariants]
-      , sc_bndr :: InId           -- case binder
-      , sc_alts :: [InAlt]        -- Alternatives
-      , sc_env  :: StaticEnv      -- See Note [StaticEnv invariant]
-      , sc_cont :: SimplCont }
+mkSelect :: DupFlag -> InId -> [InAlt] -> StaticEnv -> Scont -> Scont
+mkSelect m n o p r = Scont $ oneShot $ \a b c d e f g h -> e r m n o p   $ runScont r a b c d e f g h
 
-  -- The two strict forms have no DupFlag, because we never duplicate them
-  | StrictBind          -- (StrictBind x xs b K)[e] = let x = e in K[\xs.b]
-                        --       or, equivalently,  = K[ (\x xs.b) e ]
-      { sc_dup   :: DupFlag        -- See Note [DupFlag invariants]
-      , sc_bndr  :: InId
-      , sc_bndrs :: [InBndr]
-      , sc_body  :: InExpr
-      , sc_env   :: StaticEnv      -- See Note [StaticEnv invariant]
-      , sc_cont  :: SimplCont }
+mkStrictBind :: DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> Scont -> Scont
+mkStrictBind m n o p q r = Scont $ oneShot $ \a b c d e f g h -> f r m n o p q $ runScont r a b c d e f g h
 
-  | StrictArg           -- (StrictArg (f e1 ..en) K)[e] = K[ f e1 .. en e ]
-      { sc_dup  :: DupFlag     -- Always Simplified or OkToDup
-      , sc_fun  :: ArgInfo     -- Specifies f, e1..en, Whether f has rules, etc
-                               --     plus strictness flags for *further* args
-      , sc_cci  :: CallCtxt    -- Whether *this* argument position is interesting
-      , sc_cont :: SimplCont }
+mkStrictArg :: DupFlag -> ArgInfo -> CallCtxt -> Scont -> Scont
+mkStrictArg m n o r = Scont $ oneShot $ \a b c d e f g h -> g r m n o     $ runScont r a b c d e f g h
 
-  | TickIt              -- (TickIt t K)[e] = K[ tick t e ]
-        (Tickish Id)    -- Tick tickish <hole>
-        SimplCont
+mkTickIt :: Tickish Id -> Scont -> Scont
+mkTickIt m r = Scont $ oneShot $ \a b c d e f g h -> h r m         $ runScont r a b c d e f g h
+
+
+newtype Scont = Scont
+  { runScont
+    :: forall r
+     . (OutType -> CallCtxt -> r)                                      -- Stop
+    -> (Scont -> OutCoercion -> r -> r)                                         -- CastIt
+    -> (Scont -> DupFlag -> InExpr -> StaticEnv -> r -> r)                      -- ApplyToVal
+    -> (Scont -> OutType -> OutType -> r -> r)                                  -- ApplyToTy
+    -> (Scont -> DupFlag -> InId -> [InAlt] -> StaticEnv -> r -> r)             -- Select
+    -> (Scont -> DupFlag -> InId -> [InBndr] -> InExpr -> StaticEnv -> r -> r)  -- StrictBind
+    -> (Scont -> DupFlag -> ArgInfo -> CallCtxt -> r -> r)                      -- StrictArg
+    -> (Scont -> Tickish Id -> r -> r)                                          -- TickIt
+    -> r
+  }
 
 type StaticEnv = SimplEnv       -- Just the static part is relevant
 
@@ -207,22 +193,25 @@ instance Outputable DupFlag where
   ppr NoDup      = text "nodup"
   ppr Simplified = text "simpl"
 
-instance Outputable SimplCont where
-  ppr (Stop ty interesting) = text "Stop" <> brackets (ppr interesting) <+> ppr ty
-  ppr (CastIt co cont  )    = (text "CastIt" <+> pprOptCo co) $$ ppr cont
-  ppr (TickIt t cont)       = (text "TickIt" <+> ppr t) $$ ppr cont
-  ppr (ApplyToTy  { sc_arg_ty = ty, sc_cont = cont })
-    = (text "ApplyToTy" <+> pprParendType ty) $$ ppr cont
-  ppr (ApplyToVal { sc_arg = arg, sc_dup = dup, sc_cont = cont })
-    = (text "ApplyToVal" <+> ppr dup <+> pprParendExpr arg)
-                                        $$ ppr cont
-  ppr (StrictBind { sc_bndr = b, sc_cont = cont })
-    = (text "StrictBind" <+> ppr b) $$ ppr cont
-  ppr (StrictArg { sc_fun = ai, sc_cont = cont })
-    = (text "StrictArg" <+> ppr (ai_fun ai)) $$ ppr cont
-  ppr (Select { sc_dup = dup, sc_bndr = bndr, sc_alts = alts, sc_env = se, sc_cont = cont })
-    = (text "Select" <+> ppr dup <+> ppr bndr) $$
-       whenPprDebug (nest 2 $ vcat [ppr (seTvSubst se), ppr alts]) $$ ppr cont
+instance Outputable Scont where
+  ppr (Scont{}) = text "scont"
+
+-- instance Outputable SimplCont where
+--   ppr (Stop ty interesting) = text "Stop" <> brackets (ppr interesting) <+> ppr ty
+--   ppr (CastIt co cont  )    = (text "CastIt" <+> pprOptCo co) $$ ppr cont
+--   ppr (TickIt t cont)       = (text "TickIt" <+> ppr t) $$ ppr cont
+--   ppr (ApplyToTy  { sc_arg_ty = ty, sc_cont = cont })
+--     = (text "ApplyToTy" <+> pprParendType ty) $$ ppr cont
+--   ppr (ApplyToVal { sc_arg = arg, sc_dup = dup, sc_cont = cont })
+--     = (text "ApplyToVal" <+> ppr dup <+> pprParendExpr arg)
+--                                         $$ ppr cont
+--   ppr (StrictBind { sc_bndr = b, sc_cont = cont })
+--     = (text "StrictBind" <+> ppr b) $$ ppr cont
+--   ppr (StrictArg { sc_fun = ai, sc_cont = cont })
+--     = (text "StrictArg" <+> ppr (ai_fun ai)) $$ ppr cont
+--   ppr (Select { sc_dup = dup, sc_bndr = bndr, sc_alts = alts, sc_env = se, sc_cont = cont })
+--     = (text "Select" <+> ppr dup <+> ppr bndr) $$
+--        whenPprDebug (nest 2 $ vcat [ppr (seTvSubst se), ppr alts]) $$ ppr cont
 
 
 {- Note [The hole type in ApplyToTy]
@@ -304,14 +293,14 @@ argInfoAppArgs (CastBy {}                : _)  = []  -- Stop at a cast
 argInfoAppArgs (ValArg e                 : as) = e       : argInfoAppArgs as
 argInfoAppArgs (TyArg { as_arg_ty = ty } : as) = Type ty : argInfoAppArgs as
 
-pushSimplifiedArgs :: SimplEnv -> [ArgSpec] -> SimplCont -> SimplCont
+pushSimplifiedArgs :: SimplEnv -> [ArgSpec] -> Scont -> Scont
 pushSimplifiedArgs _env []           k = k
 pushSimplifiedArgs env  (arg : args) k
   = case arg of
       TyArg { as_arg_ty = arg_ty, as_hole_ty = hole_ty }
-               -> ApplyToTy  { sc_arg_ty = arg_ty, sc_hole_ty = hole_ty, sc_cont = rest }
-      ValArg e -> ApplyToVal { sc_arg = e, sc_env = env, sc_dup = Simplified, sc_cont = rest }
-      CastBy c -> CastIt c rest
+               -> mkApplyToTy arg_ty hole_ty rest
+      ValArg e -> mkApplyToVal Simplified e env rest
+      CastBy c -> mkCastIt c rest
   where
     rest = pushSimplifiedArgs env args k
            -- The env has an empty SubstEnv
@@ -350,98 +339,166 @@ mkFunRules rs = Just (n_required, rs)
 ************************************************************************
 -}
 
-mkBoringStop :: OutType -> SimplCont
-mkBoringStop ty = Stop ty BoringCtxt
+mkBoringStop :: OutType -> Scont
+mkBoringStop ty = mkStop ty BoringCtxt
 
-mkRhsStop :: OutType -> SimplCont       -- See Note [RHS of lets] in CoreUnfold
-mkRhsStop ty = Stop ty RhsCtxt
+mkRhsStop :: OutType -> Scont       -- See Note [RHS of lets] in CoreUnfold
+mkRhsStop ty = mkStop ty RhsCtxt
 
-mkLazyArgStop :: OutType -> CallCtxt -> SimplCont
-mkLazyArgStop ty cci = Stop ty cci
-
--------------------
-contIsRhsOrArg :: SimplCont -> Bool
-contIsRhsOrArg (Stop {})       = True
-contIsRhsOrArg (StrictBind {}) = True
-contIsRhsOrArg (StrictArg {})  = True
-contIsRhsOrArg _               = False
-
-contIsRhs :: SimplCont -> Bool
-contIsRhs (Stop _ RhsCtxt) = True
-contIsRhs _                = False
+mkLazyArgStop :: OutType -> CallCtxt -> Scont
+mkLazyArgStop ty cci = mkStop ty cci
 
 -------------------
-contIsStop :: SimplCont -> Bool
-contIsStop (Stop {}) = True
-contIsStop _         = False
+contIsRhsOrArg :: Scont -> Bool
+contIsRhsOrArg s =
+  runScont s
+    (oneShot $ \_ _         -> True)    -- Stop
+    (oneShot $ \_ _ _         -> False)   -- CastIt
+    (oneShot $ \_ _ _ _ _     -> False)   -- ApplyToVal
+    (oneShot $ \_ _ _ _       -> False)   -- ApplyToTy
+    (oneShot $ \_ _ _ _ _ _   -> False)   -- Select
+    (oneShot $ \_ _ _ _ _ _ _ -> True)    -- StrictBind
+    (oneShot $ \_ _ _ _ _     -> True)    -- StrictArg
+    (oneShot $ \_ _ _         -> False)   -- TickIt
 
-contIsDupable :: SimplCont -> Bool
-contIsDupable (Stop {})                         = True
-contIsDupable (ApplyToTy  { sc_cont = k })      = contIsDupable k
-contIsDupable (ApplyToVal { sc_dup = OkToDup }) = True -- See Note [DupFlag invariants]
-contIsDupable (Select { sc_dup = OkToDup })     = True -- ...ditto...
-contIsDupable (StrictArg { sc_dup = OkToDup })  = True -- ...ditto...
-contIsDupable (CastIt _ k)                      = contIsDupable k
-contIsDupable _                                 = False
-
--------------------
-contIsTrivial :: SimplCont -> Bool
-contIsTrivial (Stop {})                                         = True
-contIsTrivial (ApplyToTy { sc_cont = k })                       = contIsTrivial k
-contIsTrivial (ApplyToVal { sc_arg = Coercion _, sc_cont = k }) = contIsTrivial k
-contIsTrivial (CastIt _ k)                                      = contIsTrivial k
-contIsTrivial _                                                 = False
-
--------------------
-contResultType :: SimplCont -> OutType
-contResultType (Stop ty _)                  = ty
-contResultType (CastIt _ k)                 = contResultType k
-contResultType (StrictBind { sc_cont = k }) = contResultType k
-contResultType (StrictArg { sc_cont = k })  = contResultType k
-contResultType (Select { sc_cont = k })     = contResultType k
-contResultType (ApplyToTy  { sc_cont = k }) = contResultType k
-contResultType (ApplyToVal { sc_cont = k }) = contResultType k
-contResultType (TickIt _ k)                 = contResultType k
-
-contHoleType :: SimplCont -> OutType
-contHoleType (Stop ty _)                      = ty
-contHoleType (TickIt _ k)                     = contHoleType k
-contHoleType (CastIt co _)                    = pFst (coercionKind co)
-contHoleType (StrictBind { sc_bndr = b, sc_dup = dup, sc_env = se })
-  = perhapsSubstTy dup se (idType b)
-contHoleType (StrictArg { sc_fun = ai })      = funArgTy (ai_type ai)
-contHoleType (ApplyToTy  { sc_hole_ty = ty }) = ty  -- See Note [The hole type in ApplyToTy]
-contHoleType (ApplyToVal { sc_arg = e, sc_env = se, sc_dup = dup, sc_cont = k })
-  = mkVisFunTy (perhapsSubstTy dup se (exprType e))
-               (contHoleType k)
-contHoleType (Select { sc_dup = d, sc_bndr =  b, sc_env = se })
-  = perhapsSubstTy d se (idType b)
+contIsRhs :: Scont -> Bool
+contIsRhs s =
+  runScont s
+    (oneShot $ \_ a         -> case a of {RhsCtxt -> True; _ -> False})  -- Stop
+    (oneShot $ \_ _ _         -> False)                                    -- CastIt
+    (oneShot $ \_ _ _ _ _     -> False)                                    -- ApplyToVal
+    (oneShot $ \_ _ _ _       -> False)                                    -- ApplyToTy
+    (oneShot $ \_ _ _ _ _ _   -> False)                                    -- Select
+    (oneShot $ \_ _ _ _ _ _ _ -> False)                                    -- StrictBind
+    (oneShot $ \_ _ _ _ _     -> False)                                    -- StrictArg
+    (oneShot $ \_ _ _         -> False)                                    -- TickIt
 
 -------------------
-countArgs :: SimplCont -> Int
+contIsStop :: Scont -> Bool
+contIsStop s =
+  runScont s
+    (oneShot $ \_ _         -> True)   -- Stop
+    (oneShot $ \_ _ _         -> False)  -- CastIt
+    (oneShot $ \_ _ _ _ _     -> False)  -- ApplyToVal
+    (oneShot $ \_ _ _ _       -> False)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _ _   -> False)  -- Select
+    (oneShot $ \_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (oneShot $ \_ _ _ _ _     -> False)  -- StrictArg
+    (oneShot $ \_ _ _         -> False)  -- TickIt
+
+-------------------
+contIsSelect :: Scont -> Bool
+contIsSelect s =
+  runScont s
+    (oneShot $ \_ _           -> False)   -- Stop
+    (oneShot $ \_ _ _         -> False)  -- CastIt
+    (oneShot $ \_ _ _ _ _     -> False)  -- ApplyToVal
+    (oneShot $ \_ _ _ _       -> False)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _ _   -> True)  -- Select
+    (oneShot $ \_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (oneShot $ \_ _ _ _ _     -> False)  -- StrictArg
+    (oneShot $ \_ _ _         -> False)  -- TickIt
+
+contIsDupable :: Scont -> Bool
+contIsDupable s =
+  runScont s
+    (oneShot $ \_ _         -> True)   -- Stop
+    (oneShot $ \_ _ k         -> k)      -- CastIt
+    (oneShot $ \_ a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- ApplyToVal -- See Note [DupFlag invariants]
+    (oneShot $ \_ _ _ k       -> k)      -- ApplyToTy
+    (oneShot $ \_ a _ _ _ _   -> case a of {OkToDup -> True; _ -> False})  -- Select -- See Note [DupFlag invariants]
+    (oneShot $ \_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (oneShot $ \_ a _ _ _     -> case a of {OkToDup -> True; _ -> False})  -- StrictArg -- See Note [DupFlag invariants]
+    (oneShot $ \_ _ _         -> False)  -- TickIt
+
+-------------------
+contIsTrivial :: Scont -> Bool
+contIsTrivial s =
+  runScont s
+    (oneShot $ \_ _         -> True)   -- Stop
+    (oneShot $ \_ _ k         -> k)  -- CastIt
+    (oneShot $ \_ _ a _ k     -> case (a, k) of {(Coercion _, k) -> k; _ -> False})  -- ApplyToVal
+    (oneShot $ \_ _ _ k       -> k)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _ _   -> False)  -- Select
+    (oneShot $ \_ _ _ _ _ _ _ -> False)  -- StrictBind
+    (oneShot $ \_ _ _ _ _     -> False)  -- StrictArg
+    (oneShot $ \_ _ _         -> False)  -- TickIt
+
+-------------------
+contResultType :: Scont -> OutType
+contResultType s =
+  runScont s
+    (oneShot $ \t _         -> t)  -- Stop
+    (oneShot $ \_ _ k         -> k)  -- CastIt
+    (oneShot $ \_ _ _ _ k     -> k)  -- ApplyToVal
+    (oneShot $ \_ _ _ k       -> k)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _ k   -> k)  -- Select
+    (oneShot $ \_ _ _ _ _ _ k -> k)  -- StrictBind
+    (oneShot $ \_ _ _ _ k     -> k)  -- StrictArg
+    (oneShot $ \_ _ k         -> k)  -- TickIt
+
+contHoleType :: Scont -> OutType
+contHoleType s =
+  runScont s
+    (oneShot $ \t _         -> t)   -- Stop
+    (oneShot $ \_ c _         -> pFst (coercionKind c))  -- CastIt
+    (oneShot $ \_ d a e k     -> mkVisFunTy (perhapsSubstTy d e (exprType a)) k)  -- ApplyToVal
+    (oneShot $ \_ _ t _       -> t)  -- ApplyToTy   -- See Note [The hole type in ApplyToTy]
+    (oneShot $ \_ d b _ e _   -> perhapsSubstTy d e (idType b))  -- Select
+    (oneShot $ \_ d b _ _ e _ -> perhapsSubstTy d e (idType b))  -- StrictBind
+    (oneShot $ \_ _ a _ _     -> funArgTy (ai_type a))  -- StrictArg
+    (oneShot $ \_ _ k         -> k)  -- TickIt
+
+
+-------------------
+countArgs :: Scont -> Int
 -- Count all arguments, including types, coercions, and other values
-countArgs (ApplyToTy  { sc_cont = cont }) = 1 + countArgs cont
-countArgs (ApplyToVal { sc_cont = cont }) = 1 + countArgs cont
-countArgs _                               = 0
+countArgs s =
+  runScont s
+    (oneShot $ \_ _         -> 0)  -- Stop
+    (oneShot $ \_ _ _         -> 0)  -- CastIt
+    (oneShot $ \_ _ _ _ args  -> 1 + args)  -- ApplyToVal
+    (oneShot $ \_ _ _ args    -> 1 + args)  -- ApplyToTy
+    (oneShot $ \_ _ _ _ _ _   -> 0)  -- Select
+    (oneShot $ \_ _ _ _ _ _ _ -> 0)  -- StrictBind
+    (oneShot $ \_ _ _ _ _     -> 0)  -- StrictArg
+    (oneShot $ \_ _ _         -> 0)  -- TickIt
 
-contArgs :: SimplCont -> (Bool, [ArgSummary], SimplCont)
+contArgs :: Scont -> (Bool, [ArgSummary], Scont)
 -- Summarises value args, discards type args and coercions
 -- The returned continuation of the call is only used to
 -- answer questions like "are you interesting?"
 contArgs cont
   | lone cont = (True, [], cont)
-  | otherwise = go [] cont
+  | otherwise =
+      let b = go cont
+       in (False, reverse b, cont)
   where
-    lone (ApplyToTy  {}) = False  -- See Note [Lone variables] in CoreUnfold
-    lone (ApplyToVal {}) = False
-    lone (CastIt {})     = False
-    lone _               = True
+    lone s =
+      runScont s
+        (oneShot $ \_ _         -> True)   -- Stop
+        (oneShot $ \_ _ _         -> False)  -- CastIt
+        (oneShot $ \_ _ _ _ _     -> False)  -- ApplyToVal
+        (oneShot $ \_ _ _ _       -> False)  -- ApplyToTy  -- See Note [Lone variables] in CoreUnfold
+        (oneShot $ \_ _ _ _ _ _   -> True)   -- Select
+        (oneShot $ \_ _ _ _ _ _ _ -> True)   -- StrictBind
+        (oneShot $ \_ _ _ _ _     -> True)   -- StrictArg
+        (oneShot $ \_ _ _         -> True)   -- TickIt
 
-    go args (ApplyToVal { sc_arg = arg, sc_env = se, sc_cont = k })
-                                        = go (is_interesting arg se : args) k
-    go args (ApplyToTy { sc_cont = k }) = go args k
-    go args (CastIt _ k)                = go args k
-    go args k                           = (False, reverse args, k)
+    go s =
+      runScont s
+        (oneShot $ \a b         -> [])  -- Stop
+        (oneShot $ \_ a b         -> b)  -- CastIt
+        (oneShot $ \_ a arg se k  ->
+          let (y) = k
+           in is_interesting arg se : y
+          )
+          -- ApplyToVal
+        (oneShot $ \_ a b c       -> c)  -- ApplyToTy
+        (oneShot $ \_ a b c d e   -> [])  -- Select
+        (oneShot $ \_ a b c d e f -> [])  -- StrictBind
+        (oneShot $ \_ a b c d     -> [])  -- StrictArg
+        (oneShot $ \_ a b         -> [])  -- TickIt
 
     is_interesting arg se = interestingArg se arg
                    -- Do *not* use short-cutting substitution here
@@ -453,7 +510,7 @@ mkArgInfo :: SimplEnv
           -> Id
           -> [CoreRule] -- Rules for function
           -> Int        -- Number of value args
-          -> SimplCont  -- Context of the call
+          -> Scont  -- Context of the call
           -> ArgInfo
 
 mkArgInfo env fun rules n_val_args call_cont
@@ -618,28 +675,14 @@ This made a small compile-time perf improvement in perf/compiler/T6048,
 and it looks plausible to me.
 -}
 
-interestingCallContext :: SimplEnv -> SimplCont -> CallCtxt
+interestingCallContext :: SimplEnv -> Scont -> CallCtxt
 -- See Note [Interesting call context]
 interestingCallContext env cont
   = interesting cont
   where
-    interesting (Select {})
-       | sm_case_case (getMode env) = CaseCtxt
-       | otherwise                  = BoringCtxt
-       -- See Note [No case of case is boring]
-
-    interesting (ApplyToVal {}) = ValAppCtxt
-        -- Can happen if we have (f Int |> co) y
-        -- If f has an INLINE prag we need to give it some
-        -- motivation to inline. See Note [Cast then apply]
-        -- in CoreUnfold
-
-    interesting (StrictArg { sc_cci = cci }) = cci
-    interesting (StrictBind {})              = BoringCtxt
-    interesting (Stop _ cci)                 = cci
-    interesting (TickIt _ k)                 = interesting k
-    interesting (ApplyToTy { sc_cont = k })  = interesting k
-    interesting (CastIt _ k)                 = interesting k
+    interesting s = runScont s
+      (oneShot $ \_ cci         -> cci)   -- Stop
+      (oneShot $ \_ _ k         -> k)  -- CastIt
         -- If this call is the arg of a strict function, the context
         -- is a bit interesting.  If we inline here, we may get useful
         -- evaluation information to avoid repeated evals: e.g.
@@ -654,8 +697,19 @@ interestingCallContext env cont
         -- Here, the context of (f x) is strict, and if f's unfolding is
         -- a build it's *great* to inline it here.  So we must ensure that
         -- the context for (f x) is not totally uninteresting.
+      (oneShot $ \_ _ _ _ _     -> ValAppCtxt)  -- ApplyToVal
+        -- Can happen if we have (f Int |> co) y
+        -- If f has an INLINE prag we need to give it some
+        -- motivation to inline. See Note [Cast then apply]
+        -- in CoreUnfold
+      (oneShot $ \_ _ _ k       -> k)  -- ApplyToTy
+      (oneShot $ \_ _ _ _ _ _   -> if sm_case_case (getMode env) then CaseCtxt else BoringCtxt)  -- Select
+       -- See Note [No case of case is boring]
+      (oneShot $ \_ _ _ _ _ _ _ -> BoringCtxt)  -- StrictBind
+      (oneShot $ \_ _ _ cci _   -> cci)  -- StrictArg
+      (oneShot $ \_ _ k         -> k)  -- TickIt
 
-interestingArgContext :: [CoreRule] -> SimplCont -> Bool
+interestingArgContext :: [CoreRule] -> Scont -> Bool
 -- If the argument has form (f x y), where x,y are boring,
 -- and f is marked INLINE, then we don't want to inline f.
 -- But if the context of the argument is
@@ -681,14 +735,16 @@ interestingArgContext rules call_cont
   where
     enclosing_fn_has_rules = go call_cont
 
-    go (Select {})                  = False
-    go (ApplyToVal {})              = False  -- Shouldn't really happen
-    go (ApplyToTy  {})              = False  -- Ditto
-    go (StrictArg { sc_cci = cci }) = interesting cci
-    go (StrictBind {})              = False      -- ??
-    go (CastIt _ c)                 = go c
-    go (Stop _ cci)                 = interesting cci
-    go (TickIt _ c)                 = go c
+    go s =
+      runScont s
+        (oneShot $ \_ cci       -> interesting cci)  -- Stop
+        (oneShot $ \_ _ c         -> c)                -- CastIt
+        (oneShot $ \_ _ _ _ _     -> False)            -- ApplyToVal  -- Shouldn't really happen
+        (oneShot $ \_ _ _ _       -> False)            -- ApplyToTy   -- Ditto
+        (oneShot $ \_ _ _ _ _ _   -> False)            -- Select
+        (oneShot $ \_ _ _ _ _ _ _ -> False)            -- StrictBind  -- ?
+        (oneShot $ \_ _ _ cci _   -> interesting cci)  -- StrictArg
+        (oneShot $ \_ _ c         -> c)                -- TickIt
 
     interesting RuleArgCtxt = True
     interesting _           = False
@@ -1393,7 +1449,7 @@ won't inline because 'e' is too big.
 ************************************************************************
 -}
 
-mkLam :: SimplEnv -> [OutBndr] -> OutExpr -> SimplCont -> SimplM OutExpr
+mkLam :: SimplEnv -> [OutBndr] -> OutExpr -> Scont -> SimplM OutExpr
 -- mkLam tries three things
 --      a) eta reduction, if that gives a trivial expression
 --      b) eta expansion [only if there are some value lambdas]
